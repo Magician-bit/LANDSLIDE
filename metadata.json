@@ -1,0 +1,8 @@
+{
+  "name": "Landslide Detector",
+  "description": "AI-powered mountain disaster intelligence platform for landslide risk monitoring, forecasting, impact analysis, isolation detection and emergency response prioritization.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

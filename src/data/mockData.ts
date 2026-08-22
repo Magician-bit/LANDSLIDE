@@ -102,7 +102,7 @@ export const mockFieldReports: FieldReport[] = [
     aiClassification: 'High Risk Tension Crack',
     aiConfidence: 92,
     verificationStatus: 'Verified',
-    imageUrl: 'https://picsum.photos/seed/crack/400/300'
+    imageUrl: `${import.meta.env.BASE_URL}images/reports/crack.jpg`
   }
 ];
 
