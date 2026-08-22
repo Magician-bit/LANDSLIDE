@@ -1,244 +1,384 @@
 import React, { useState } from 'react';
-import { X, TrendingUp, TrendingDown, Clock, ShieldAlert, BarChart2, Activity, Users, Camera, Mountain } from 'lucide-react';
+import {
+  X,
+  TrendingUp,
+  TrendingDown,
+  Clock,
+  ShieldAlert,
+  BarChart2,
+  Activity,
+  Users,
+  Mountain,
+  Zap,
+  HelpCircle,
+  Sliders,
+  Compass,
+  CheckCircle2,
+  AlertTriangle,
+  FileText,
+  Navigation,
+  ShieldCheck,
+  Layers,
+  ArrowRight,
+  Sparkles
+} from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
+import { RiskZone, RiskState } from '../types';
 
-export default function LocationIntelligence({ intel, onClose }: { intel: any; onClose: () => void }) {
-  const zone = intel?.zones?.find((z: any) => z.id === intel.selectedZoneId);
-  const state = intel?.riskStates?.[intel.selectedZoneId] || {
-    currentRisk: zone?.staticSusceptibility || 50,
+export default function LocationIntelligence({
+  intel,
+  onClose
+}: {
+  intel: any;
+  onClose: () => void;
+}) {
+  const zones: RiskZone[] = Array.isArray(intel?.zones) ? intel.zones : [];
+  const selectedZoneId: string | null = intel?.selectedZoneId;
+  const zone: RiskZone | undefined = zones.find(z => z.id === selectedZoneId);
+
+  const [activeTab, setActiveTab] = useState<'OVERVIEW' | 'EXPLANATION' | 'HISTORY'>('OVERVIEW');
+
+  const getRiskColor = (risk: number) => {
+    if (risk >= 75) return '#ef4444';
+    if (risk >= 60) return '#f97316';
+    if (risk >= 40) return '#eab308';
+    return '#10b981';
+  };
+
+  const getRiskBadge = (status: string) => {
+    switch (status) {
+      case 'CRITICAL':
+        return 'bg-red-950/80 text-red-400 border border-red-800/80';
+      case 'HIGH':
+        return 'bg-orange-950/80 text-orange-400 border border-orange-800/80';
+      case 'MODERATE':
+        return 'bg-yellow-950/80 text-yellow-400 border border-yellow-800/80';
+      default:
+        return 'bg-emerald-950/80 text-emerald-400 border border-emerald-800/80';
+    }
+  };
+
+  // -------------------------------------------------------------
+  // If NO zone is selected, render the LIVE MONITORING OVERVIEW panel
+  // -------------------------------------------------------------
+  if (!zone) {
+    let criticalZonesCount = 0;
+    let highRiskZonesCount = 0;
+    if (intel?.riskStates) {
+      Object.values(intel.riskStates).forEach((rs: any) => {
+        if (rs) {
+          if (rs.currentRisk >= 75) criticalZonesCount++;
+          else if (rs.currentRisk >= 60) highRiskZonesCount++;
+        }
+      });
+    }
+
+    const activeAlerts = Array.isArray(intel?.alerts) ? intel.alerts.length : 0;
+
+    return (
+      <div id="location-intelligence-panel" className="flex flex-col h-full bg-slate-900 border-l border-slate-800 text-slate-100">
+        {/* Header */}
+        <div className="p-4 border-b border-slate-800 bg-slate-950/80 flex justify-between items-start shrink-0">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="font-mono text-xs font-bold text-blue-400 bg-blue-950/60 border border-blue-800/60 px-1.5 py-0.5 rounded">
+                TELEMETRY NETWORK
+              </span>
+              <span className="text-[10px] font-mono px-2 py-0.5 bg-slate-800 text-slate-300 border border-slate-700 rounded font-semibold uppercase">
+                LIVE SENSORS
+              </span>
+            </div>
+            <h2 className="font-bold text-lg text-white mt-1 flex items-center gap-2">
+              <Activity size={18} className="text-blue-400" />
+              Live Monitoring
+            </h2>
+            <p className="text-xs text-slate-400">
+              Real-time regional telemetry &amp; sensor feeds
+            </p>
+          </div>
+
+          <button
+            onClick={onClose}
+            className="p-1.5 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-slate-200 transition-colors"
+            title="Close panel"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        {/* Overview Content */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          {/* Summary KPIs */}
+          <div className="grid grid-cols-3 gap-2 text-center text-xs">
+            <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl">
+              <span className="text-slate-500 block text-[9px] uppercase font-bold">Active Alerts</span>
+              <div className="text-xl font-extrabold font-mono text-red-400 mt-1">{activeAlerts}</div>
+              <span className="text-[9px] text-slate-500">Live Warnings</span>
+            </div>
+
+            <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl">
+              <span className="text-slate-500 block text-[9px] uppercase font-bold">Critical Zones</span>
+              <div className="text-xl font-extrabold font-mono text-orange-400 mt-1">{criticalZonesCount}</div>
+              <span className="text-[9px] text-slate-500">&ge; 75/100 Risk</span>
+            </div>
+
+            <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl">
+              <span className="text-slate-500 block text-[9px] uppercase font-bold">High Risk Zones</span>
+              <div className="text-xl font-extrabold font-mono text-amber-400 mt-1">{highRiskZonesCount}</div>
+              <span className="text-[9px] text-slate-500">&ge; 60/100 Risk</span>
+            </div>
+          </div>
+
+          {/* Prompt */}
+          <div className="p-3.5 bg-blue-950/40 border border-blue-800/60 rounded-xl text-xs text-blue-200 flex items-center gap-2.5">
+            <Compass size={18} className="text-blue-400 shrink-0" />
+            <p className="leading-relaxed">
+              Select any monitored zone on the map or from the list below to inspect its live geological condition.
+            </p>
+          </div>
+
+          {/* Monitored Zones Quick Select List */}
+          <div className="bg-slate-950 border border-slate-800 p-3.5 rounded-xl space-y-2">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+              <h3 className="text-xs uppercase font-bold text-slate-300 flex items-center gap-1.5">
+                <Mountain size={14} className="text-blue-400" />
+                Monitored Mountain Sectors ({zones.length})
+              </h3>
+              <span className="text-[10px] font-mono text-slate-500">Click to inspect</span>
+            </div>
+
+            <div className="space-y-1.5">
+              {zones.map(z => {
+                const rs = intel?.riskStates?.[z.id] || { currentRisk: z.staticSusceptibility, status: 'MODERATE' };
+                return (
+                  <div
+                    key={z.id}
+                    onClick={() => intel?.setSelectedZoneId(z.id)}
+                    className="p-2.5 bg-slate-900 hover:bg-slate-850 border border-slate-800 rounded-lg cursor-pointer transition-all flex items-center justify-between text-xs"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-[10px] font-bold text-slate-400 bg-slate-800 px-1.5 py-0.5 rounded">
+                        {z.id}
+                      </span>
+                      <div>
+                        <span className="font-bold text-white block">{z.name}</span>
+                        <span className="text-[10px] text-slate-400">Pop: {z.population.toLocaleString()}</span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono font-bold text-white text-xs">{rs.currentRisk}%</span>
+                      <span className={`text-[9px] font-mono uppercase px-1.5 py-0.2 rounded border ${getRiskBadge(rs.status || 'MODERATE')}`}>
+                        {rs.status || 'MOD'}
+                      </span>
+                      <ArrowRight size={13} className="text-slate-600" />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // -------------------------------------------------------------
+  // If a zone IS selected, render the ZONE INSPECTION & TELEMETRY
+  // -------------------------------------------------------------
+  const state: RiskState = intel?.riskStates?.[zone.id] || {
+    currentRisk: zone.staticSusceptibility || 50,
     triggerScore: 50,
     momentum: 0,
     hazardWindow: ['--', '--'] as [string, string],
-    forecast: { t6: 50, t12: 50, t24: 50 },
-    confidence: 85,
+    forecast: { t6: 50, t12: 50, t24: 50, t48: 50 },
+    confidence: 88,
     primaryDriver: 'Slope Susceptibility',
-    featureContributions: []
+    featureContributions: [],
+    explanation: 'Risk is at baseline equilibrium.',
+    status: 'MODERATE'
   };
 
-  const [showImage, setShowImage] = useState(false);
-  const [imgError, setImgError] = useState(false);
-
-  if (!zone) return null;
+  const env = zone.environmentalFeatures || {
+    elevation: 2042,
+    slope: 38,
+    aspect: 'South-East',
+    terrainRuggedness: 8.4,
+    landCover: 'Degraded Forest Slopes',
+    ndviChange: -0.12,
+    drainage: 'High Convergence'
+  };
 
   const chartData = [
+    { time: 'T-24h', risk: Math.max(10, (state.currentRisk ?? 50) - 22) },
+    { time: 'T-6h', risk: Math.max(15, (state.currentRisk ?? 50) - 10) },
     { time: 'Now', risk: state.currentRisk ?? 50 },
     { time: '+6h', risk: state.forecast?.t6 ?? 50 },
     { time: '+12h', risk: state.forecast?.t12 ?? 50 },
     { time: '+24h', risk: state.forecast?.t24 ?? 50 },
+    { time: '+48h', risk: state.forecast?.t48 ?? 50 }
   ];
 
-  const getRiskColor = (risk: number) => {
-    if (risk > 80) return 'text-red-500';
-    if (risk > 60) return 'text-orange-500';
-    if (risk > 40) return 'text-yellow-500';
-    return 'text-green-500';
-  };
-
-  const reports = Array.isArray(intel?.reports)
-    ? intel.reports.filter((r: any) => r && r.zoneId === zone.id)
-    : [];
-
-  const env = zone.environmentalFeatures || {
-    elevation: 2000,
-    slope: 35,
-    aspect: 'South',
-    terrainRuggedness: 8,
-    landCover: 'Forest Slopes',
-    ndviChange: -0.1,
-    drainage: 'High Convergence'
-  };
-
-  // Safe image path
-  const imageSrc = `${import.meta.env.BASE_URL}images/locations/${zone.id}.svg`;
-
   return (
-    <div className="flex flex-col h-full bg-slate-900">
-      <div className="flex justify-between items-center p-4 border-b border-slate-800 bg-slate-950/60">
+    <div id="location-intelligence-panel" className="flex flex-col h-full bg-slate-900 border-l border-slate-800 text-slate-100">
+      {/* Header */}
+      <div className="p-4 border-b border-slate-800 bg-slate-950/80 flex justify-between items-start shrink-0">
         <div>
-          <h2 className="font-bold text-lg text-slate-100">{zone.name}</h2>
-          <p className="text-xs text-slate-400 font-mono">{zone.id} | {zone.coordinates?.[0]?.toFixed(4)}, {zone.coordinates?.[1]?.toFixed(4)}</p>
+          <div className="flex items-center gap-2">
+            <span className="font-mono text-xs font-bold text-blue-400 bg-blue-950/60 border border-blue-800/60 px-1.5 py-0.5 rounded">
+              {zone.id}
+            </span>
+            <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${getRiskBadge(state.status || 'MODERATE')}`}>
+              {state.status || 'MODERATE'} RISK
+            </span>
+          </div>
+          <h2 className="font-bold text-lg text-white mt-1">{zone.name}</h2>
+          <p className="text-xs text-slate-400 font-mono">
+            {zone.coordinates?.[0]?.toFixed(4)}°N, {zone.coordinates?.[1]?.toFixed(4)}°E • Elev: {env.elevation}m ASL
+          </p>
         </div>
-        <button onClick={onClose} className="p-2 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-slate-200 transition-colors">
-          <X size={20} />
+        <button
+          onClick={() => intel?.setSelectedZoneId(null)}
+          className="p-1.5 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-slate-200 transition-colors"
+          title="Deselect zone"
+        >
+          <X size={18} />
         </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-6">
+      {/* Primary Action Buttons: FORECAST | SIMULATE | RESPOND */}
+      <div className="p-3 bg-slate-950/60 border-b border-slate-800 grid grid-cols-3 gap-2">
+        <button
+          onClick={() => {
+            intel?.setSelectedZoneId(zone.id);
+            intel?.setActiveMode('FORECAST');
+            intel?.run24HForecast(zone.id);
+          }}
+          className="py-2 px-2 bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white rounded-lg text-xs font-bold flex items-center justify-center gap-1 transition-colors shadow-sm"
+        >
+          <Zap size={13} />
+          Forecast
+        </button>
+
+        <button
+          onClick={() => {
+            intel?.setSelectedZoneId(zone.id);
+            intel?.setActiveMode('SIMULATE');
+          }}
+          className="py-2 px-2 bg-amber-600 hover:bg-amber-500 active:bg-amber-700 text-white rounded-lg text-xs font-bold flex items-center justify-center gap-1 transition-colors shadow-sm"
+        >
+          <Sliders size={13} />
+          Simulate
+        </button>
+
+        <button
+          onClick={() => {
+            intel?.setSelectedZoneId(zone.id);
+            intel?.setActiveMode('RESPOND');
+          }}
+          className="py-2 px-2 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white rounded-lg text-xs font-bold flex items-center justify-center gap-1 transition-colors shadow-sm"
+        >
+          <ShieldCheck size={13} />
+          Respond
+        </button>
+      </div>
+
+      {/* Content Area */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-4">
         
-        {/* Terrain Visual */}
-        <div className="relative rounded-xl overflow-hidden border border-slate-800 group cursor-pointer bg-slate-950" onClick={() => setShowImage(!showImage)}>
-          {!imgError ? (
-            <img 
-              src={imageSrc} 
-              alt={`Terrain of ${zone.name}`} 
-              className="w-full h-40 object-cover" 
-              onError={() => setImgError(true)}
-            />
-          ) : (
-            <div className="w-full h-40 bg-gradient-to-br from-slate-900 to-slate-950 flex flex-col items-center justify-center p-4 text-center">
-              <Mountain className="text-slate-600 mb-2" size={36} />
-              <span className="text-xs font-semibold text-slate-300">{zone.name} Topography</span>
-              <span className="text-[11px] text-slate-500">{env.slope}° Slope Gradient • {env.elevation}m ASL</span>
-            </div>
-          )}
-          <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-transparent to-transparent pointer-events-none"></div>
-          <div className="absolute bottom-3 left-3 flex items-center gap-2 pointer-events-none">
-            <Camera size={16} className="text-slate-300" />
-            <span className="text-xs font-semibold text-slate-200 uppercase tracking-wider">Sector Elevation &amp; Terrain</span>
-          </div>
-        </div>
-
-        {showImage && (
-          <div className="fixed inset-0 z-50 bg-slate-950/90 flex items-center justify-center p-6" onClick={() => setShowImage(false)}>
-            <div className="max-w-2xl w-full bg-slate-900 border border-slate-700 rounded-xl overflow-hidden shadow-2xl" onClick={e => e.stopPropagation()}>
-              {!imgError ? (
-                <img src={imageSrc} alt="Full Terrain" className="w-full h-auto max-h-[70vh] object-cover" />
-              ) : (
-                <div className="p-8 text-center bg-slate-950">
-                  <Mountain className="mx-auto text-slate-500 mb-3" size={48} />
-                  <p className="text-slate-300 font-bold">{zone.name}</p>
-                  <p className="text-slate-500 text-xs mt-1">Slope: {env.slope}° | Aspect: {env.aspect} | Elevation: {env.elevation}m</p>
-                </div>
-              )}
-              <div className="p-4 bg-slate-900 border-t border-slate-800 flex justify-between items-center">
-                <p className="text-sm text-slate-300 font-medium">{zone.name} Topographic Model</p>
-                <button onClick={() => setShowImage(false)} className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-white text-xs font-semibold rounded-md transition-colors">
-                  Close
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Primary Metrics */}
-        <div className="grid grid-cols-2 gap-4">
-          <div className="bg-slate-950 border border-slate-800 p-4 rounded-xl shadow-md">
-            <h3 className="text-xs uppercase text-slate-500 font-bold mb-1">Dynamic Risk</h3>
-            <div className="flex items-baseline gap-2">
-              <span className={`text-3xl font-bold ${getRiskColor(state.currentRisk ?? 50)}`}>{state.currentRisk ?? 50}</span>
-              <span className="text-slate-400 text-sm">/ 100</span>
-            </div>
-            <div className="mt-2 flex items-center gap-1 text-xs font-medium">
-              {(state.momentum ?? 0) > 0 ? (
-                <span className="text-red-400 flex items-center"><TrendingUp size={14} className="mr-1"/> +{state.momentum} escalating</span>
-              ) : (state.momentum ?? 0) < 0 ? (
-                <span className="text-green-400 flex items-center"><TrendingDown size={14} className="mr-1"/> {state.momentum} declining</span>
-              ) : (
-                <span className="text-slate-400 flex items-center">→ Stable equilibrium</span>
-              )}
-            </div>
-          </div>
-
-          <div className="bg-slate-950 border border-slate-800 p-4 rounded-xl shadow-md">
-            <h3 className="text-xs uppercase text-slate-500 font-bold mb-1">Hazard Window</h3>
-            <div className="flex items-center gap-2 h-9">
-              <Clock className={(state.currentRisk ?? 0) > 75 ? 'text-red-400' : 'text-slate-500'} size={20} />
-              <span className={`font-bold text-sm ${((state.currentRisk ?? 0) > 75) ? 'text-red-400' : 'text-slate-300'}`}>
-                {state.hazardWindow?.[0] || '--'} - {state.hazardWindow?.[1] || '--'}
+        {/* Dynamic Risk Score Cards */}
+        <div className="grid grid-cols-2 gap-3">
+          <div className="bg-slate-950 border border-slate-800 p-3.5 rounded-xl shadow-md">
+            <div className="text-[10px] uppercase tracking-wider text-slate-400 font-bold mb-1">Current Risk</div>
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-3xl font-extrabold font-mono" style={{ color: getRiskColor(state.currentRisk ?? 50) }}>
+                {state.currentRisk ?? 50}
               </span>
+              <span className="text-slate-500 text-xs font-mono">/ 100</span>
             </div>
-            <div className="mt-2 text-[11px] text-slate-500">Probabilistic risk window</div>
+            <div className="mt-1.5 flex items-center gap-1 text-[11px] font-medium">
+              {(state.momentum ?? 0) > 0 ? (
+                <span className="text-red-400 flex items-center">
+                  <TrendingUp size={12} className="mr-0.5 inline" /> +{state.momentum} escalating
+                </span>
+              ) : (
+                <span className="text-slate-400">→ Stable equilibrium</span>
+              )}
+            </div>
+          </div>
+
+          <div className="bg-slate-950 border border-slate-800 p-3.5 rounded-xl shadow-md">
+            <div className="text-[10px] uppercase tracking-wider text-slate-400 font-bold mb-1">24h Forecast Risk</div>
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-3xl font-extrabold font-mono text-white">
+                {state.forecast?.t24 ?? 50}
+              </span>
+              <span className="text-slate-500 text-xs font-mono">/ 100</span>
+            </div>
+            <div className="mt-1.5 text-[11px] text-slate-400 truncate">
+              Peak: {Math.max(state.currentRisk, state.forecast?.t6 || 0, state.forecast?.t12 || 0, state.forecast?.t24 || 0)}%
+            </div>
           </div>
         </div>
 
-        {/* Forecast Chart */}
-        <div className="bg-slate-950 border border-slate-800 p-4 rounded-xl shadow-md">
-          <h3 className="text-sm font-bold text-slate-200 mb-4 flex items-center gap-2"><Activity size={16} className="text-blue-500"/> 24h Risk Forecast</h3>
-          <div className="h-40 w-full">
+        {/* Primary Driver & Explanation */}
+        <div className="bg-slate-950 border border-slate-800 p-3.5 rounded-xl shadow-md space-y-2">
+          <div className="flex items-center justify-between border-b border-slate-800 pb-1.5">
+            <span className="text-[10px] uppercase font-bold text-slate-400">Primary Risk Driver</span>
+            <span className="text-xs font-bold text-amber-300 font-mono">{state.primaryDriver}</span>
+          </div>
+          <p className="text-xs text-slate-300 leading-relaxed">
+            {state.explanation}
+          </p>
+        </div>
+
+        {/* Environmental Telemetry */}
+        <div className="bg-slate-950 border border-slate-800 p-3.5 rounded-xl shadow-md space-y-2.5">
+          <h3 className="text-xs uppercase font-bold text-slate-300 flex items-center gap-1.5 border-b border-slate-800 pb-1.5">
+            <Compass size={14} className="text-blue-400" />
+            Environmental Feeds
+          </h3>
+
+          <div className="grid grid-cols-2 gap-2 text-xs">
+            <div className="p-2 bg-slate-900 border border-slate-800 rounded-lg">
+              <span className="text-slate-500 block text-[10px]">Slope Angle</span>
+              <span className="font-bold text-white font-mono">{env.slope}°</span>
+            </div>
+            <div className="p-2 bg-slate-900 border border-slate-800 rounded-lg">
+              <span className="text-slate-500 block text-[10px]">Exposed Pop.</span>
+              <span className="font-bold text-white font-mono">{zone.population?.toLocaleString()}</span>
+            </div>
+            <div className="p-2 bg-slate-900 border border-slate-800 rounded-lg">
+              <span className="text-slate-500 block text-[10px]">Terrain Ruggedness</span>
+              <span className="font-bold text-white font-mono">{env.terrainRuggedness}/10</span>
+            </div>
+            <div className="p-2 bg-slate-900 border border-slate-800 rounded-lg">
+              <span className="text-slate-500 block text-[10px]">Drainage Runoff</span>
+              <span className="font-bold text-white">{env.drainage}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Mini Trajectory Chart */}
+        <div className="bg-slate-950 border border-slate-800 p-3.5 rounded-xl shadow-md">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs uppercase font-bold text-slate-300">Risk Timeline Evolution</span>
+            <span className="text-[10px] font-mono text-slate-500">T-24h to +48h</span>
+          </div>
+          <div className="h-28 w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={chartData} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
+              <AreaChart data={chartData} margin={{ top: 5, right: 10, left: -25, bottom: 0 }}>
                 <defs>
-                  <linearGradient id="riskGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
-                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                  <linearGradient id="liveGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.6} />
+                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.0} />
                   </linearGradient>
                 </defs>
-                <XAxis dataKey="time" stroke="#475569" fontSize={11} tickLine={false} axisLine={false} />
-                <YAxis stroke="#475569" fontSize={11} tickLine={false} axisLine={false} domain={[0, 100]} />
-                <Tooltip 
-                  contentStyle={{ backgroundColor: '#0f172a', borderColor: '#1e293b', borderRadius: '0.5rem', fontSize: '12px' }}
-                  itemStyle={{ color: '#38bdf8' }}
-                />
-                <Area type="monotone" dataKey="risk" stroke="#3b82f6" strokeWidth={2} fillOpacity={1} fill="url(#riskGradient)" />
+                <XAxis dataKey="time" stroke="#64748b" fontSize={9} tickLine={false} />
+                <YAxis domain={[0, 100]} stroke="#64748b" fontSize={9} tickLine={false} />
+                <Area type="monotone" dataKey="risk" stroke="#3b82f6" strokeWidth={2} fillOpacity={1} fill="url(#liveGrad)" />
               </AreaChart>
             </ResponsiveContainer>
-          </div>
-        </div>
-
-        {/* Explainability (SHAP-style) */}
-        <div className="bg-slate-950 border border-slate-800 p-4 rounded-xl shadow-md">
-          <h3 className="text-sm font-bold text-slate-200 mb-1 flex items-center gap-2"><BarChart2 size={16} className="text-purple-500"/> Model Feature Attribution</h3>
-          <p className="text-xs text-slate-400 mb-4">SHAP-style contribution breakdown</p>
-          
-          <div className="space-y-3">
-            {Array.isArray(state.featureContributions) && state.featureContributions.map((fc: any, i: number) => (
-              <div key={i} className="flex flex-col">
-                <div className="flex justify-between text-xs mb-1">
-                  <span className="text-slate-300">{fc.feature}</span>
-                  <span className={fc.value > 0 ? 'text-red-400 font-semibold' : 'text-green-400 font-semibold'}>
-                    {fc.value > 0 ? '+' : ''}{Number(fc.value).toFixed(1)}
-                  </span>
-                </div>
-                <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden flex">
-                  <div 
-                    className={`h-full ${fc.value > 0 ? 'bg-red-500' : 'bg-green-500'}`} 
-                    style={{ width: `${Math.min(100, Math.max(5, Math.abs(fc.value)))}%`, marginLeft: fc.value < 0 ? 'auto' : '0' }}
-                  ></div>
-                </div>
-              </div>
-            ))}
-          </div>
-          
-          <div className="mt-4 p-3 bg-indigo-950/40 border border-indigo-900/60 rounded-lg">
-            <div className="text-xs text-indigo-300 font-semibold uppercase tracking-wider mb-1">Primary Hazard Driver</div>
-            <p className="text-xs text-slate-300 leading-relaxed"><span className="font-semibold text-white">{state.primaryDriver}</span> is currently the dominant factor escalating susceptibility in this sector.</p>
-          </div>
-        </div>
-
-        {/* Impact Exposure */}
-        <div className="bg-slate-950 border border-slate-800 p-4 rounded-xl shadow-md">
-          <h3 className="text-sm font-bold text-slate-200 mb-4 flex items-center gap-2"><Users size={16} className="text-emerald-500"/> Impact Exposure</h3>
-          
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <div className="text-xs text-slate-500 uppercase font-semibold">Population Exposed</div>
-              <div className="text-xl font-bold text-slate-200 mt-1">{zone.population?.toLocaleString() ?? 'N/A'}</div>
-            </div>
-            <div>
-              <div className="text-xs text-slate-500 uppercase font-semibold">Static Susceptibility</div>
-              <div className="text-xl font-bold text-slate-200 mt-1">{zone.staticSusceptibility ?? 50}/100</div>
-            </div>
-          </div>
-        </div>
-
-        {/* Ground Truth / Evidence */}
-        <div className="bg-slate-950 border border-slate-800 p-4 rounded-xl shadow-md">
-          <h3 className="text-sm font-bold text-slate-200 mb-4 flex items-center gap-2"><ShieldAlert size={16} className="text-yellow-500"/> Ground Evidence Verification</h3>
-          
-          <div className="flex justify-between items-center mb-4 p-3 bg-slate-900 border border-slate-800/80 rounded-lg">
-            <span className="text-xs text-slate-400">Integrated Model Confidence</span>
-            <span className="text-base font-bold text-slate-200">{state.confidence ?? 85}%</span>
-          </div>
-
-          <div className="space-y-3">
-            {reports.map((report: any) => (
-              <div key={report.id} className="border border-slate-800 rounded-lg p-3 bg-slate-900/90">
-                <div className="flex justify-between items-start mb-1.5">
-                  <span className="text-xs font-bold text-slate-300 px-2 py-0.5 bg-slate-800 rounded">{report.type}</span>
-                  <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded ${report.verificationStatus === 'Verified' ? 'bg-emerald-950 text-emerald-400 border border-emerald-900/60' : 'bg-yellow-950 text-yellow-400 border border-yellow-900/60'}`}>
-                    {report.verificationStatus}
-                  </span>
-                </div>
-                <p className="text-xs text-slate-300 mb-2 leading-relaxed">{report.description}</p>
-                <div className="flex justify-between text-[11px] text-slate-500">
-                  <span>{report.reporter}</span>
-                  <span>{report.timestamp ? new Date(report.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}</span>
-                </div>
-              </div>
-            ))}
-            {reports.length === 0 && (
-              <div className="text-xs text-slate-500 text-center py-4">No recent field reports filed for this sector.</div>
-            )}
           </div>
         </div>
 
