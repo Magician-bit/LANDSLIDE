@@ -1,8 +1,11 @@
 {
   "name": "Landslide Detector",
-  "description": "AI-powered mountain disaster intelligence platform for landslide risk monitoring, forecasting, impact analysis, isolation detection and emergency response prioritization.",
-  "requestFramePermissions": [],
+  "description": "Pan-India multi-source landslide intelligence platform fusing IMD meteorology, GSI susceptibility, NRSC historical atlas, Sentinel-1 InSAR surface deformation, NCS seismic data, community field reports, and multimodal AI image assessment.",
+  "requestFramePermissions": [
+    "geolocation"
+  ],
   "majorCapabilities": [
     "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
   ]
 }
+

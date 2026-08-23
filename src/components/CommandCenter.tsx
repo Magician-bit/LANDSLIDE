@@ -12,7 +12,13 @@ import {
   ArrowRight,
   CheckCircle2,
   Clock,
-  ShieldCheck
+  ShieldCheck,
+  Mountain,
+  Satellite,
+  CloudRain,
+  Database,
+  Crosshair,
+  HelpCircle
 } from 'lucide-react';
 import { AppMode, RiskZone } from '../types';
 
@@ -59,11 +65,20 @@ export default function CommandCenter({
   };
 
   const getRiskBadge = (risk: number) => {
-    if (risk >= 75) return 'bg-red-950/90 text-red-400 border border-red-800 font-bold';
-    if (risk >= 60) return 'bg-orange-950/90 text-orange-400 border border-orange-800 font-bold';
-    if (risk >= 40) return 'bg-yellow-950/90 text-yellow-400 border border-yellow-800 font-medium';
+    if (risk >= 80) return 'bg-red-950/90 text-red-400 border border-red-800 font-bold';
+    if (risk >= 65) return 'bg-orange-950/90 text-orange-400 border border-orange-800 font-bold';
+    if (risk >= 50) return 'bg-yellow-950/90 text-yellow-400 border border-yellow-800 font-medium';
     return 'bg-emerald-950/90 text-emerald-400 border border-emerald-800 font-medium';
   };
+
+  // Group zones by Hill Range
+  const hillRangeGroups = [
+    { range: 'Western Ghats', state: 'Kerala / Karnataka / Maharashtra / TN', icon: '🌿' },
+    { range: 'Garhwal & Kumaon Himalaya', state: 'Uttarakhand', icon: '🏔️' },
+    { range: 'Pir Panjal & Dhauladhar', state: 'Himachal Pradesh', icon: '⛰️' },
+    { range: 'Eastern Himalaya & Darjeeling', state: 'Sikkim / West Bengal', icon: '🌲' },
+    { range: 'Northeastern Hills', state: 'Meghalaya / Mizoram / Assam / Nagaland', icon: '🌧️' }
+  ];
 
   return (
     <div id="command-center-dashboard" className="p-4 md:p-8 max-w-7xl mx-auto space-y-8">
@@ -75,14 +90,14 @@ export default function CommandCenter({
               OPERATIONAL COMMAND
             </span>
             <span className="text-xs text-slate-500 font-mono">
-              REGION: DARJEELING-KALIMPONG-KURSEONG HIMALAYA
+              NATIONAL GEOSPATIAL HAZARD GRID
             </span>
           </div>
           <h1 className="text-2xl md:text-3xl font-extrabold text-white tracking-tight">
-            Disaster Intelligence Operations
+            Pan-India Landslide Intelligence Platform
           </h1>
-          <p className="text-slate-400 text-sm mt-1">
-            Multi-Source Landslide Prediction, Real-Time GIS Telemetry, and Dijkstra Evacuation Engine.
+          <p className="text-slate-400 text-sm mt-1 max-w-3xl">
+            Real-time multi-source data fusion (IMD AWS, Sentinel-1 InSAR, NCS Seismology, GSI NLSM baseline, NRSC Atlas) with Dijkstra isolation routing and Citizen Ground Reporting.
           </p>
         </div>
 
@@ -95,13 +110,13 @@ export default function CommandCenter({
             className="px-3.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1.5 transition-colors border border-slate-700 shadow-sm"
           >
             <Activity size={14} className="text-blue-400" />
-            Live GIS
+            Live GIS Map
           </button>
 
           <button
             onClick={() => {
               intel?.setActiveMode('FORECAST');
-              intel?.run24HForecast('Z-042');
+              intel?.run24HForecast(intel?.selectedZoneId || 'Z-WAY-01');
               onNavigateToMap('FORECAST');
             }}
             className="px-3.5 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-sm shadow-blue-600/20"
@@ -162,191 +177,122 @@ export default function CommandCenter({
 
         <div className="bg-slate-900 border border-slate-800 p-4.5 rounded-xl shadow-lg relative overflow-hidden">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-slate-400 text-xs uppercase font-bold tracking-wider">Population Exposed</span>
+            <span className="text-slate-400 text-xs uppercase font-bold tracking-wider">Exposed Population</span>
             <div className="p-1.5 bg-blue-950/80 border border-blue-900 text-blue-400 rounded-lg">
               <Users size={16} />
             </div>
           </div>
-          <div className="text-3xl font-extrabold text-blue-300 font-mono">
+          <div className="text-3xl font-extrabold text-white font-mono">
             {populationExposed.toLocaleString()}
           </div>
-          <p className="text-[11px] text-slate-500 mt-1">Residents in elevated hazard corridors</p>
+          <p className="text-[11px] text-slate-500 mt-1">Residents in moderate/high sectors</p>
         </div>
 
         <div className="bg-slate-900 border border-slate-800 p-4.5 rounded-xl shadow-lg relative overflow-hidden">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-slate-400 text-xs uppercase font-bold tracking-wider">Isolation Impact</span>
+            <span className="text-slate-400 text-xs uppercase font-bold tracking-wider">Isolated Settlements</span>
             <div className="p-1.5 bg-purple-950/80 border border-purple-900 text-purple-400 rounded-lg">
-              <ShieldAlert size={16} />
+              <Activity size={16} />
             </div>
           </div>
-          <div className="text-3xl font-extrabold text-purple-300 font-mono">
-            {isolatedCommunities} <span className="text-xs font-normal text-slate-500">villages</span>
+          <div className="text-3xl font-extrabold text-purple-400 font-mono">
+            {isolatedCommunities} <span className="text-xs font-normal text-slate-500">({isolatedPopulation.toLocaleString()} pop)</span>
           </div>
-          <p className="text-[11px] text-slate-500 mt-1">
-            {isolatedPopulation > 0 ? `${isolatedPopulation.toLocaleString()} citizens cut off` : 'All corridors currently accessible'}
-          </p>
+          <p className="text-[11px] text-slate-500 mt-1">Zero traversable road corridors</p>
         </div>
       </div>
 
-      {/* Main Grid: Monitored Sectors Table & Priority Response Queue */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        
-        {/* Monitored Mountain Sectors Table (7 cols) */}
-        <div className="lg:col-span-7 bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-lg flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between mb-4 border-b border-slate-800 pb-3">
-              <div>
-                <h3 className="text-base font-bold text-white flex items-center gap-2">
-                  <MapPin size={18} className="text-blue-400" />
-                  Monitored Mountain Sectors
-                </h3>
-                <p className="text-xs text-slate-400">Deterministic risk indices across 7 active telemetry zones</p>
-              </div>
-              <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-300">
-                7 Active Sectors
-              </span>
+      {/* Main Grid: Priority Alerts (Left) + Hill Ranges Directory (Right) */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Priority Alerts Feed */}
+        <div className="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-lg space-y-4">
+          <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+            <div className="flex items-center gap-2">
+              <AlertTriangle size={18} className="text-red-500" />
+              <h2 className="text-base font-bold text-white">Live Hazard Alerts & Seismic Triggers</h2>
             </div>
+            <span className="text-xs font-mono bg-slate-800 px-2 py-0.5 rounded text-slate-300">
+              {intel?.alerts?.length || 0} active
+            </span>
+          </div>
 
-            <div className="space-y-2">
-              {safeZones.map(zone => {
-                const rs = intel?.riskStates?.[zone.id] || { currentRisk: zone.staticSusceptibility, status: 'MODERATE' };
-                const isSelected = intel?.selectedZoneId === zone.id;
-                return (
-                  <div
-                    key={zone.id}
-                    onClick={() => {
-                      intel?.setSelectedZoneId(zone.id);
-                      onNavigateToMap();
-                    }}
-                    className={`p-3 rounded-lg border transition-all cursor-pointer flex items-center justify-between gap-3 ${
-                      isSelected
-                        ? 'bg-blue-950/60 border-blue-500 shadow-md'
-                        : 'bg-slate-950/80 hover:bg-slate-850 border-slate-800/80'
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <span className="font-mono text-xs font-bold text-slate-400 bg-slate-800 px-1.5 py-0.5 rounded">
-                        {zone.id}
+          <div className="space-y-3 max-h-[480px] overflow-y-auto pr-1">
+            {intel?.alerts && intel.alerts.length > 0 ? (
+              intel.alerts.map((alert: any) => (
+                <div
+                  key={alert.id}
+                  onClick={() => handleAlertClick(alert)}
+                  className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 hover:border-slate-700 transition-all cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                >
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded uppercase border ${
+                        alert.severity === 'CRITICAL' ? 'bg-red-950 text-red-400 border-red-800' : 'bg-orange-950 text-orange-400 border-orange-800'
+                      }`}>
+                        {alert.severity}
                       </span>
-                      <div>
-                        <span className="font-bold text-xs text-white block">{zone.name}</span>
-                        <span className="text-[11px] text-slate-400">
-                          Pop: {zone.population.toLocaleString()} • Slope: {zone.environmentalFeatures.slope}°
-                        </span>
-                      </div>
+                      <h3 className="text-sm font-bold text-white">{alert.title}</h3>
                     </div>
-
-                    <div className="flex items-center gap-3">
-                      <div className="text-right">
-                        <span className="text-sm font-bold font-mono text-white block">
-                          {rs.currentRisk}%
-                        </span>
-                        <span className="text-[10px] text-slate-500 font-mono">
-                          +24h: {rs.forecast?.t24 ?? rs.currentRisk}%
-                        </span>
-                      </div>
-                      <span className={`text-[10px] uppercase font-mono px-2 py-0.5 rounded ${getRiskBadge(rs.currentRisk)}`}>
-                        {rs.status || 'MODERATE'}
-                      </span>
-                      <ArrowRight size={14} className="text-slate-600" />
+                    <p className="text-xs text-slate-400 leading-relaxed">{alert.description}</p>
+                    <div className="text-[11px] text-slate-500 font-mono">
+                      Source: {alert.source || 'Data Fusion Engine'} • {new Date(alert.timestamp).toLocaleTimeString()}
                     </div>
                   </div>
-                );
-              })}
-            </div>
+
+                  <div className="shrink-0 flex items-center gap-1.5 text-xs text-blue-400 hover:text-blue-300 font-semibold">
+                    <span>Inspect Sector</span>
+                    <ArrowRight size={14} />
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="p-8 text-center text-slate-500 text-sm">
+                No critical hazard alerts active at this moment.
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Priority Response Queue & Clickable Alerts (5 cols) */}
-        <div className="lg:col-span-5 bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-lg flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between mb-4 border-b border-slate-800 pb-3">
-              <div>
-                <h3 className="text-base font-bold text-white flex items-center gap-2">
-                  <AlertTriangle size={18} className="text-red-400" />
-                  Priority Response Queue
-                </h3>
-                <p className="text-xs text-slate-400">Click any alert to zoom and open analysis</p>
-              </div>
-              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-red-950 text-red-400 border border-red-800">
-                LIVE ALERTS
-              </span>
+        {/* Pan-India Hill Range Overview */}
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-lg space-y-4">
+          <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+            <div className="flex items-center gap-2">
+              <Mountain size={18} className="text-blue-400" />
+              <h2 className="text-base font-bold text-white">Mountain Belts & Sectors</h2>
             </div>
+            <span className="text-xs font-mono text-slate-400">{safeZones.length} Sectors</span>
+          </div>
 
-            <div className="space-y-3 max-h-[380px] overflow-y-auto pr-1">
-              {Array.isArray(intel?.alerts) && intel.alerts.map((a: any, i: number) => (
+          <div className="space-y-2.5 max-h-[480px] overflow-y-auto pr-1">
+            {safeZones.map(zone => {
+              const rs = intel?.riskStates?.[zone.id] || { currentRisk: zone.staticSusceptibility, status: 'MODERATE' };
+              return (
                 <div
-                  key={a.id || i}
-                  onClick={() => handleAlertClick(a)}
-                  className="bg-slate-950 hover:bg-slate-850 border border-slate-800 p-3.5 rounded-lg cursor-pointer transition-all flex items-start gap-3 group"
+                  key={zone.id}
+                  onClick={() => {
+                    intel?.setSelectedZoneId(zone.id);
+                    intel?.setActiveMode('LIVE');
+                    onNavigateToMap('LIVE');
+                  }}
+                  className="p-3 bg-slate-950 border border-slate-800 hover:border-slate-700 rounded-xl cursor-pointer transition-all flex items-center justify-between"
                 >
-                  <div className={`p-2 rounded-lg mt-0.5 shrink-0 ${a.severity === 'CRITICAL' ? 'bg-red-950 text-red-400 border border-red-900' : 'bg-orange-950 text-orange-400 border border-orange-900'}`}>
-                    <AlertTriangle size={15} />
+                  <div>
+                    <h3 className="text-xs font-bold text-white">{zone.name}</h3>
+                    <p className="text-[11px] text-slate-400">{zone.district}, {zone.state} ({zone.hillRange})</p>
+                    <p className="text-[10px] text-slate-500">Pop: {zone.population?.toLocaleString()} • Slope: {zone.environmentalFeatures.slope}°</p>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex justify-between items-start gap-2">
-                      <h4 className="font-bold text-slate-200 text-xs group-hover:text-blue-300 transition-colors">
-                        {a.title}
-                      </h4>
-                      <span className="text-[10px] text-slate-500 whitespace-nowrap font-mono">
-                        {a.timestamp ? new Date(a.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--'}
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-slate-400 mt-1 leading-relaxed line-clamp-2">
-                      {a.description}
-                    </p>
-                    <span className="text-[10px] text-blue-400 font-semibold mt-1.5 inline-flex items-center gap-1 group-hover:underline">
-                      Inspect Sector on GIS Map →
+
+                  <div className="text-right">
+                    <span className={`inline-block text-xs font-mono font-bold px-2 py-0.5 rounded border ${getRiskBadge(rs.currentRisk)}`}>
+                      {rs.currentRisk}%
+                    </span>
+                    <span className="block text-[9px] text-slate-500 uppercase mt-0.5">
+                      {rs.status}
                     </span>
                   </div>
                 </div>
-              ))}
-
-              {(!intel?.alerts || intel.alerts.length === 0) && (
-                <div className="text-center py-10 text-slate-500 text-xs">
-                  All monitored mountain corridors operating within baseline safety limits.
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-      </div>
-
-      {/* Demo Workflow & Guided Exploration Card */}
-      <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-lg">
-        <div className="flex items-center justify-between mb-3 border-b border-slate-800 pb-2">
-          <h3 className="text-xs uppercase font-bold text-slate-300 flex items-center gap-2">
-            <Sparkles size={15} className="text-blue-400" />
-            Interactive Disaster Intelligence Lifecycle (Detect → Predict → Simulate → Respond)
-          </h3>
-          <span className="text-[10px] font-mono text-slate-400">10-Step Operational Flow</span>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-xs">
-          <div className="p-3 bg-slate-950 border border-slate-800/80 rounded-lg">
-            <span className="font-mono text-blue-400 font-bold block text-[10px] uppercase">1. DETECT</span>
-            <p className="text-slate-300 font-semibold mt-0.5">Location Selection &amp; GIS</p>
-            <p className="text-slate-500 text-[11px] mt-1">Select Tista Valley Sector A (Z-042) to inspect real-time risk.</p>
-          </div>
-
-          <div className="p-3 bg-slate-950 border border-slate-800/80 rounded-lg">
-            <span className="font-mono text-indigo-400 font-bold block text-[10px] uppercase">2. PREDICT</span>
-            <p className="text-slate-300 font-semibold mt-0.5">24h Forecast Engine</p>
-            <p className="text-slate-500 text-[11px] mt-1">Click [24h Forecast] to run the 8-step predictive diagnostic model.</p>
-          </div>
-
-          <div className="p-3 bg-slate-950 border border-slate-800/80 rounded-lg">
-            <span className="font-mono text-amber-400 font-bold block text-[10px] uppercase">3. SIMULATE</span>
-            <p className="text-slate-300 font-semibold mt-0.5">What-If Disaster Cascades</p>
-            <p className="text-slate-500 text-[11px] mt-1">Apply "Heavy Rainfall" or fail Bridge B-17 to test network isolation.</p>
-          </div>
-
-          <div className="p-3 bg-slate-950 border border-slate-800/80 rounded-lg">
-            <span className="font-mono text-emerald-400 font-bold block text-[10px] uppercase">4. RESPOND</span>
-            <p className="text-slate-300 font-semibold mt-0.5">Dijkstra Evacuation</p>
-            <p className="text-slate-500 text-[11px] mt-1">Inspect shortest safe evacuation routes and mountain relief shelters.</p>
+              );
+            })}
           </div>
         </div>
       </div>

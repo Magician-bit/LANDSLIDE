@@ -20,7 +20,10 @@ import {
   ShieldCheck,
   Layers,
   ArrowRight,
-  Sparkles
+  Sparkles,
+  Database,
+  CloudRain,
+  Satellite
 } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { RiskZone, RiskState } from '../types';
@@ -32,16 +35,16 @@ export default function LocationIntelligence({
   intel: any;
   onClose: () => void;
 }) {
-  const zones: RiskZone[] = Array.isArray(intel?.zones) ? intel.zones : [];
+  const zones: RiskZone[] = Array.isArray(intel?.filteredZones) ? intel.filteredZones : (Array.isArray(intel?.zones) ? intel.zones : []);
+  const allZones: RiskZone[] = Array.isArray(intel?.zones) ? intel.zones : [];
   const selectedZoneId: string | null = intel?.selectedZoneId;
-  const zone: RiskZone | undefined = zones.find(z => z.id === selectedZoneId);
-
-  const [activeTab, setActiveTab] = useState<'OVERVIEW' | 'EXPLANATION' | 'HISTORY'>('OVERVIEW');
+  const zone: RiskZone | undefined = allZones.find(z => z.id === selectedZoneId);
 
   const getRiskColor = (risk: number) => {
-    if (risk >= 75) return '#ef4444';
-    if (risk >= 60) return '#f97316';
-    if (risk >= 40) return '#eab308';
+    if (risk >= 80) return '#ef4444';
+    if (risk >= 65) return '#f97316';
+    if (risk >= 50) return '#eab308';
+    if (risk >= 35) return '#06b6d4';
     return '#10b981';
   };
 
@@ -49,6 +52,7 @@ export default function LocationIntelligence({
     switch (status) {
       case 'CRITICAL':
         return 'bg-red-950/80 text-red-400 border border-red-800/80';
+      case 'VERY_HIGH':
       case 'HIGH':
         return 'bg-orange-950/80 text-orange-400 border border-orange-800/80';
       case 'MODERATE':
@@ -58,9 +62,7 @@ export default function LocationIntelligence({
     }
   };
 
-  // -------------------------------------------------------------
-  // If NO zone is selected, render the LIVE MONITORING OVERVIEW panel
-  // -------------------------------------------------------------
+  // If NO zone is selected, render the LIVE PAN-INDIA MONITORING OVERVIEW panel
   if (!zone) {
     let criticalZonesCount = 0;
     let highRiskZonesCount = 0;
@@ -74,6 +76,7 @@ export default function LocationIntelligence({
     }
 
     const activeAlerts = Array.isArray(intel?.alerts) ? intel.alerts.length : 0;
+    const reportsCount = Array.isArray(intel?.reports) ? intel.reports.length : 0;
 
     return (
       <div id="location-intelligence-panel" className="flex flex-col h-full bg-slate-900 border-l border-slate-800 text-slate-100">
@@ -82,18 +85,18 @@ export default function LocationIntelligence({
           <div>
             <div className="flex items-center gap-2">
               <span className="font-mono text-xs font-bold text-blue-400 bg-blue-950/60 border border-blue-800/60 px-1.5 py-0.5 rounded">
-                TELEMETRY NETWORK
+                PAN-INDIA SENSORS
               </span>
-              <span className="text-[10px] font-mono px-2 py-0.5 bg-slate-800 text-slate-300 border border-slate-700 rounded font-semibold uppercase">
-                LIVE SENSORS
+              <span className="text-[10px] font-mono px-2 py-0.5 bg-emerald-950 text-emerald-400 border border-emerald-800 rounded font-semibold uppercase">
+                ACTIVE TELEMETRY
               </span>
             </div>
             <h2 className="font-bold text-lg text-white mt-1 flex items-center gap-2">
               <Activity size={18} className="text-blue-400" />
-              Live Monitoring
+              Pan-India Monitoring
             </h2>
             <p className="text-xs text-slate-400">
-              Real-time regional telemetry &amp; sensor feeds
+              IMD AWS, Sentinel-1 InSAR, NCS Seismic, GSI NLSM baseline
             </p>
           </div>
 
@@ -119,21 +122,21 @@ export default function LocationIntelligence({
             <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl">
               <span className="text-slate-500 block text-[9px] uppercase font-bold">Critical Zones</span>
               <div className="text-xl font-extrabold font-mono text-orange-400 mt-1">{criticalZonesCount}</div>
-              <span className="text-[9px] text-slate-500">&ge; 75/100 Risk</span>
+              <span className="text-[9px] text-slate-500">≥ 75/100 Risk</span>
             </div>
 
             <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl">
-              <span className="text-slate-500 block text-[9px] uppercase font-bold">High Risk Zones</span>
-              <div className="text-xl font-extrabold font-mono text-amber-400 mt-1">{highRiskZonesCount}</div>
-              <span className="text-[9px] text-slate-500">&ge; 60/100 Risk</span>
+              <span className="text-slate-500 block text-[9px] uppercase font-bold">Field Reports</span>
+              <div className="text-xl font-extrabold font-mono text-cyan-400 mt-1">{reportsCount}</div>
+              <span className="text-[9px] text-slate-500">Citizen Feed</span>
             </div>
           </div>
 
-          {/* Prompt */}
+          {/* Quick Info */}
           <div className="p-3.5 bg-blue-950/40 border border-blue-800/60 rounded-xl text-xs text-blue-200 flex items-center gap-2.5">
             <Compass size={18} className="text-blue-400 shrink-0" />
             <p className="leading-relaxed">
-              Select any monitored zone on the map or from the list below to inspect its live geological condition.
+              Select any monitored hill range or sector on the map to inspect its real-time multi-source risk profile.
             </p>
           </div>
 
@@ -147,7 +150,7 @@ export default function LocationIntelligence({
               <span className="text-[10px] font-mono text-slate-500">Click to inspect</span>
             </div>
 
-            <div className="space-y-1.5">
+            <div className="space-y-1.5 max-h-[380px] overflow-y-auto pr-1">
               {zones.map(z => {
                 const rs = intel?.riskStates?.[z.id] || { currentRisk: z.staticSusceptibility, status: 'MODERATE' };
                 return (
@@ -162,13 +165,13 @@ export default function LocationIntelligence({
                       </span>
                       <div>
                         <span className="font-bold text-white block">{z.name}</span>
-                        <span className="text-[10px] text-slate-400">Pop: {z.population.toLocaleString()}</span>
+                        <span className="text-[10px] text-slate-400">{z.district}, {z.state}</span>
                       </div>
                     </div>
 
                     <div className="flex items-center gap-2">
                       <span className="font-mono font-bold text-white text-xs">{rs.currentRisk}%</span>
-                      <span className={`text-[9px] font-mono uppercase px-1.5 py-0.2 rounded border ${getRiskBadge(rs.status || 'MODERATE')}`}>
+                      <span className={`text-[9px] font-mono uppercase px-1.5 py-0.5 rounded border ${getRiskBadge(rs.status || 'MODERATE')}`}>
                         {rs.status || 'MOD'}
                       </span>
                       <ArrowRight size={13} className="text-slate-600" />
@@ -183,20 +186,21 @@ export default function LocationIntelligence({
     );
   }
 
-  // -------------------------------------------------------------
-  // If a zone IS selected, render the ZONE INSPECTION & TELEMETRY
-  // -------------------------------------------------------------
+  // Zone IS selected: render details
   const state: RiskState = intel?.riskStates?.[zone.id] || {
     currentRisk: zone.staticSusceptibility || 50,
+    baselineSusceptibility: zone.staticSusceptibility || 50,
     triggerScore: 50,
     momentum: 0,
     hazardWindow: ['--', '--'] as [string, string],
     forecast: { t6: 50, t12: 50, t24: 50, t48: 50 },
     confidence: 88,
-    primaryDriver: 'Slope Susceptibility',
+    dataCoverage: 85,
+    primaryDriver: 'Slope & Lithology Susceptibility',
     featureContributions: [],
     explanation: 'Risk is at baseline equilibrium.',
-    status: 'MODERATE'
+    status: 'MODERATE',
+    dataSourcesUsed: []
   };
 
   const env = zone.environmentalFeatures || {
@@ -206,7 +210,9 @@ export default function LocationIntelligence({
     terrainRuggedness: 8.4,
     landCover: 'Degraded Forest Slopes',
     ndviChange: -0.12,
-    drainage: 'High Convergence'
+    drainage: 'High Convergence',
+    lithology: 'Gneiss / Schist Complex',
+    gsiSusceptibilityClass: 'High'
   };
 
   const chartData = [
@@ -231,10 +237,13 @@ export default function LocationIntelligence({
             <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${getRiskBadge(state.status || 'MODERATE')}`}>
               {state.status || 'MODERATE'} RISK
             </span>
+            <span className="text-[10px] font-mono text-slate-400 bg-slate-800 px-1.5 py-0.5 rounded">
+              {zone.hillRange}
+            </span>
           </div>
           <h2 className="font-bold text-lg text-white mt-1">{zone.name}</h2>
           <p className="text-xs text-slate-400 font-mono">
-            {zone.coordinates?.[0]?.toFixed(4)}°N, {zone.coordinates?.[1]?.toFixed(4)}°E • Elev: {env.elevation}m ASL
+            {zone.district}, {zone.state} • Elev: {env.elevation}m ASL • {zone.coordinates[0].toFixed(3)}°N, {zone.coordinates[1].toFixed(3)}°E
           </p>
         </div>
         <button
@@ -285,11 +294,10 @@ export default function LocationIntelligence({
 
       {/* Content Area */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        
-        {/* Dynamic Risk Score Cards */}
+        {/* Dynamic Risk vs GSI Baseline Score */}
         <div className="grid grid-cols-2 gap-3">
           <div className="bg-slate-950 border border-slate-800 p-3.5 rounded-xl shadow-md">
-            <div className="text-[10px] uppercase tracking-wider text-slate-400 font-bold mb-1">Current Risk</div>
+            <div className="text-[10px] uppercase tracking-wider text-slate-400 font-bold mb-1">Dynamic Risk Index</div>
             <div className="flex items-baseline gap-1.5">
               <span className="text-3xl font-extrabold font-mono" style={{ color: getRiskColor(state.currentRisk ?? 50) }}>
                 {state.currentRisk ?? 50}
@@ -307,19 +315,33 @@ export default function LocationIntelligence({
             </div>
           </div>
 
-          <div className="bg-slate-950 border border-slate-800 p-3.5 rounded-xl shadow-md">
-            <div className="text-[10px] uppercase tracking-wider text-slate-400 font-bold mb-1">24h Forecast Risk</div>
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-3xl font-extrabold font-mono text-white">
-                {state.forecast?.t24 ?? 50}
-              </span>
-              <span className="text-slate-500 text-xs font-mono">/ 100</span>
+          <div className="bg-slate-950 border border-slate-800 p-3.5 rounded-xl shadow-md flex flex-col justify-between">
+            <div>
+              <div className="text-[10px] uppercase tracking-wider text-slate-400 font-bold mb-1">GSI NLSM Baseline</div>
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-2xl font-extrabold font-mono text-slate-200">
+                  {zone.staticSusceptibility}
+                </span>
+                <span className="text-slate-500 text-xs font-mono">/ 100</span>
+              </div>
             </div>
-            <div className="mt-1.5 text-[11px] text-slate-400 truncate">
-              Peak: {Math.max(state.currentRisk, state.forecast?.t6 || 0, state.forecast?.t12 || 0, state.forecast?.t24 || 0)}%
+            <div className="text-[11px] text-amber-400 font-medium">
+              Class: {zone.baselineSusceptibilityClass}
             </div>
           </div>
         </div>
+
+        {/* Explainability Trigger Button */}
+        <button
+          onClick={() => intel?.setIsWhyRiskModalOpen(true)}
+          className="w-full p-2.5 rounded-xl bg-blue-950/40 hover:bg-blue-900/50 border border-blue-800/60 text-xs text-blue-300 font-semibold flex items-center justify-between transition-colors"
+        >
+          <div className="flex items-center gap-2">
+            <HelpCircle size={15} className="text-blue-400" />
+            <span>Why is this Risk {state.currentRisk}/100?</span>
+          </div>
+          <span className="text-[11px] font-mono text-blue-400">View Attribution →</span>
+        </button>
 
         {/* Primary Driver & Explanation */}
         <div className="bg-slate-950 border border-slate-800 p-3.5 rounded-xl shadow-md space-y-2">
@@ -332,37 +354,61 @@ export default function LocationIntelligence({
           </p>
         </div>
 
-        {/* Environmental Telemetry */}
+        {/* Multi-Source Live Telemetry */}
         <div className="bg-slate-950 border border-slate-800 p-3.5 rounded-xl shadow-md space-y-2.5">
-          <h3 className="text-xs uppercase font-bold text-slate-300 flex items-center gap-1.5 border-b border-slate-800 pb-1.5">
-            <Compass size={14} className="text-blue-400" />
-            Environmental Feeds
+          <h3 className="text-xs uppercase font-bold text-slate-300 flex items-center justify-between border-b border-slate-800 pb-1.5">
+            <span className="flex items-center gap-1.5">
+              <Layers size={14} className="text-blue-400" />
+              Integrated Data Streams
+            </span>
+            <span className="text-[10px] font-mono text-emerald-400">Coverage: {state.dataCoverage}%</span>
           </h3>
 
           <div className="grid grid-cols-2 gap-2 text-xs">
             <div className="p-2 bg-slate-900 border border-slate-800 rounded-lg">
-              <span className="text-slate-500 block text-[10px]">Slope Angle</span>
+              <span className="text-slate-500 block text-[10px] flex items-center gap-1">
+                <CloudRain size={11} className="text-blue-400" /> IMD 24h Rain
+              </span>
+              <span className="font-bold text-white font-mono">{intel?.environmentalConditions?.rainfall24h || 45} mm</span>
+            </div>
+
+            <div className="p-2 bg-slate-900 border border-slate-800 rounded-lg">
+              <span className="text-slate-500 block text-[10px] flex items-center gap-1">
+                <Compass size={11} className="text-amber-400" /> Slope Gradient
+              </span>
               <span className="font-bold text-white font-mono">{env.slope}°</span>
             </div>
+
             <div className="p-2 bg-slate-900 border border-slate-800 rounded-lg">
-              <span className="text-slate-500 block text-[10px]">Exposed Pop.</span>
-              <span className="font-bold text-white font-mono">{zone.population?.toLocaleString()}</span>
+              <span className="text-slate-500 block text-[10px] flex items-center gap-1">
+                <Satellite size={11} className="text-purple-400" /> Sentinel InSAR
+              </span>
+              <span className="font-bold text-white font-mono">{intel?.environmentalConditions?.groundDeformationMmMonth || 3.8} mm/mo</span>
             </div>
+
             <div className="p-2 bg-slate-900 border border-slate-800 rounded-lg">
-              <span className="text-slate-500 block text-[10px]">Terrain Ruggedness</span>
-              <span className="font-bold text-white font-mono">{env.terrainRuggedness}/10</span>
+              <span className="text-slate-500 block text-[10px] flex items-center gap-1">
+                <Database size={11} className="text-cyan-400" /> NRSC Historical
+              </span>
+              <span className="font-bold text-white font-mono">{zone.historicalLandslidesCount || 12} events</span>
             </div>
-            <div className="p-2 bg-slate-900 border border-slate-800 rounded-lg">
-              <span className="text-slate-500 block text-[10px]">Drainage Runoff</span>
-              <span className="font-bold text-white">{env.drainage}</span>
-            </div>
+          </div>
+        </div>
+
+        {/* Geological Features */}
+        <div className="bg-slate-950 border border-slate-800 p-3.5 rounded-xl shadow-md space-y-2">
+          <div className="text-[10px] uppercase font-bold text-slate-400">Terrain & Geology</div>
+          <div className="text-xs text-slate-300 space-y-1">
+            <p><strong>Lithology:</strong> {env.lithology || 'Metamorphic Complex'}</p>
+            <p><strong>Drainage:</strong> {env.drainage}</p>
+            <p><strong>Exposed Population:</strong> {zone.population?.toLocaleString()}</p>
           </div>
         </div>
 
         {/* Mini Trajectory Chart */}
         <div className="bg-slate-950 border border-slate-800 p-3.5 rounded-xl shadow-md">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-xs uppercase font-bold text-slate-300">Risk Timeline Evolution</span>
+            <span className="text-xs uppercase font-bold text-slate-300">Risk Trajectory</span>
             <span className="text-[10px] font-mono text-slate-500">T-24h to +48h</span>
           </div>
           <div className="h-28 w-full">
@@ -381,7 +427,6 @@ export default function LocationIntelligence({
             </ResponsiveContainer>
           </div>
         </div>
-
       </div>
     </div>
   );

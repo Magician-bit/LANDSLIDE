@@ -4,9 +4,12 @@ export const mockZones: RiskZone[] = [
   {
     id: 'Z-042',
     name: 'Tista Valley Sector A',
+    state: 'West Bengal',
+    district: 'Darjeeling',
     coordinates: [27.0500, 88.2667], // Darjeeling-Tista corridor
     radius: 1200,
     staticSusceptibility: 78,
+    historicalLandslideCount: 14,
     population: 2840,
     environmentalFeatures: {
       elevation: 2042,
@@ -37,9 +40,12 @@ export const mockZones: RiskZone[] = [
   {
     id: 'Z-018',
     name: 'Kalimpong Ridge',
+    state: 'West Bengal',
+    district: 'Kalimpong',
     coordinates: [27.0600, 88.4700],
     radius: 1100,
     staticSusceptibility: 65,
+    historicalLandslideCount: 8,
     population: 5120,
     environmentalFeatures: {
       elevation: 1250,
@@ -63,9 +69,12 @@ export const mockZones: RiskZone[] = [
   {
     id: 'Z-091',
     name: 'Kurseong Slopes',
+    state: 'West Bengal',
+    district: 'Darjeeling',
     coordinates: [26.8833, 88.2833],
     radius: 1400,
     staticSusceptibility: 82,
+    historicalLandslideCount: 19,
     population: 4300,
     environmentalFeatures: {
       elevation: 1458,
@@ -89,9 +98,12 @@ export const mockZones: RiskZone[] = [
   {
     id: 'Z-055',
     name: 'Mirik Highway Pass',
+    state: 'West Bengal',
+    district: 'Darjeeling',
     coordinates: [26.8900, 88.1800],
     radius: 1250,
     staticSusceptibility: 74,
+    historicalLandslideCount: 11,
     population: 3450,
     environmentalFeatures: {
       elevation: 1767,
@@ -115,9 +127,12 @@ export const mockZones: RiskZone[] = [
   {
     id: 'Z-073',
     name: 'Lebong Spur',
+    state: 'West Bengal',
+    district: 'Darjeeling',
     coordinates: [27.0750, 88.2750],
     radius: 1000,
     staticSusceptibility: 79,
+    historicalLandslideCount: 12,
     population: 2900,
     environmentalFeatures: {
       elevation: 1820,
@@ -141,9 +156,12 @@ export const mockZones: RiskZone[] = [
   {
     id: 'Z-084',
     name: 'Rangpo River Gorge',
+    state: 'Sikkim',
+    district: 'Pakyong',
     coordinates: [27.1700, 88.5200],
     radius: 1300,
     staticSusceptibility: 85,
+    historicalLandslideCount: 22,
     population: 3800,
     environmentalFeatures: {
       elevation: 680,
@@ -167,9 +185,12 @@ export const mockZones: RiskZone[] = [
   {
     id: 'Z-029',
     name: 'Singamari Escarpment',
+    state: 'West Bengal',
+    district: 'Darjeeling',
     coordinates: [27.0600, 88.2500],
     radius: 950,
     staticSusceptibility: 71,
+    historicalLandslideCount: 7,
     population: 2400,
     environmentalFeatures: {
       elevation: 2134,
@@ -191,6 +212,7 @@ export const mockZones: RiskZone[] = [
     ]
   }
 ];
+
 
 export const mockNodes: InfrastructureNode[] = [
   // Settlements
@@ -255,43 +277,77 @@ export const mockFieldReports: FieldReport[] = [
   {
     id: 'R-1001',
     reporter: 'Field Team Alpha (GSI Survey)',
+    reporterName: 'Field Team Alpha (GSI Survey)',
     timestamp: new Date(Date.now() - 3600000 * 2).toISOString(),
     location: [27.0510, 88.2660],
+    locationName: 'Tista Valley Upper Ridge',
+    state: 'West Bengal',
+    district: 'Darjeeling',
     zoneId: 'Z-042',
-    type: 'Slope Tension Crack',
+    type: 'Tension Cracks',
+    incidentType: 'Tension Cracks',
+    severity: 'Severe',
     description: 'Fresh transverse tension crack observed on upper slope ridge, approximately 15cm wide with 8cm vertical displacement.',
-    aiClassification: 'High-Risk Slope Shearing',
-    aiConfidence: 94,
-    verificationStatus: 'Verified',
-    imageUrl: `${import.meta.env.BASE_URL}images/reports/crack.svg`
+    verificationStatus: 'CONFIRMED',
+    status: 'CONFIRMED',
+    impactFlags: {
+      roadAffected: true,
+      buildingAffected: false,
+      riverBlocked: false,
+      peopleTrapped: false,
+      evacuationRequired: true
+    }
   },
   {
     id: 'R-1002',
     reporter: 'Kalimpong Forest Patrol',
+    reporterName: 'Kalimpong Forest Patrol',
     timestamp: new Date(Date.now() - 3600000 * 5).toISOString(),
     location: [27.0620, 88.4680],
+    locationName: 'Kalimpong Outer Flank',
+    state: 'West Bengal',
+    district: 'Kalimpong',
     zoneId: 'Z-018',
-    type: 'Soil Seepage / Mudflow Sign',
+    type: 'Mudflow',
+    incidentType: 'Mudflow',
+    severity: 'Moderate',
     description: 'Unusual subterranean water discharge emerging above road embankment; toe saturation escalating rapidly.',
-    aiClassification: 'Early Liquefaction Risk',
-    aiConfidence: 89,
-    verificationStatus: 'Verified',
-    imageUrl: `${import.meta.env.BASE_URL}images/reports/crack.svg`
+    verificationStatus: 'CONFIRMED',
+    status: 'CONFIRMED',
+    impactFlags: {
+      roadAffected: true,
+      buildingAffected: false,
+      riverBlocked: false,
+      peopleTrapped: false,
+      evacuationRequired: false
+    }
   },
   {
     id: 'R-1003',
     reporter: 'Disaster Rapid Response Kurseong',
+    reporterName: 'Disaster Rapid Response Kurseong',
     timestamp: new Date(Date.now() - 3600000 * 9).toISOString(),
     location: [26.8840, 88.2820],
+    locationName: 'Kurseong Tea Terrace',
+    state: 'West Bengal',
+    district: 'Darjeeling',
     zoneId: 'Z-091',
-    type: 'Toe Bulge & Retaining Wall Tilt',
+    type: 'Slope Failure',
+    incidentType: 'Slope Failure',
+    severity: 'Severe',
     description: 'Stone masonry retaining wall along tea terrace bowed outwards by 22cm following overnight showers.',
-    aiClassification: 'Structural Retaining Wall Failure',
-    aiConfidence: 91,
-    verificationStatus: 'Verified',
-    imageUrl: `${import.meta.env.BASE_URL}images/reports/crack.svg`
+    verificationStatus: 'CONFIRMED',
+    status: 'CONFIRMED',
+    impactFlags: {
+      roadAffected: true,
+      buildingAffected: true,
+      riverBlocked: false,
+      peopleTrapped: false,
+      evacuationRequired: true
+    }
   }
 ];
+
 
 export const initialDynamicTrigger: DynamicTrigger = {
   rainfall1h: 4.2,

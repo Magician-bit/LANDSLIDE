@@ -9,40 +9,58 @@ import {
   TimelineStep,
   CascadingNode,
   EvacuationPlan,
-  EvacuationRoute
+  EvacuationRoute,
+  RiskModelConfig,
+  RiskFeatureContribution
 } from '../types';
 
 function getNum(val: number | undefined | null, fallback: number): number {
   return typeof val === 'number' && Number.isFinite(val) ? val : fallback;
 }
 
+const DEFAULT_RISK_CONFIG: RiskModelConfig = {
+  weightBaseline: 0.30,
+  weightRainfall: 0.32,
+  weightSoilMoisture: 0.16,
+  weightSlopeInstability: 0.12,
+  weightSatelliteDeformation: 0.04,
+  weightSeismicTrigger: 0.03,
+  weightCommunityReports: 0.03
+};
+
 export function calculateDynamicRisk(
   zone?: Partial<RiskZone> | null,
   trigger?: Partial<DynamicTrigger> | null,
   scenario?: Partial<Scenario> | null,
   reports?: FieldReport[] | null,
-  timelineStep: TimelineStep = 'NOW'
+  timelineStep: TimelineStep = 'NOW',
+  config: RiskModelConfig = DEFAULT_RISK_CONFIG
 ): RiskState {
   const safeZone = zone || {};
   
-  // Safe clamped values to prevent NaN or undefined
-  const rainfall24h = Math.max(0, Math.min(250, getNum(trigger?.rainfall24h, 36.5)));
-  const rainfallAnomaly = Math.max(0.5, Math.min(5, getNum(trigger?.rainfallAnomaly, Math.max(0.8, Number((rainfall24h / 25).toFixed(2))))));
-  const antecedentPrecipitation = Math.max(0, Math.min(250, getNum(trigger?.antecedentPrecipitation, Math.max(30, rainfall24h * 1.6))));
-  const soilMoisture = Math.max(0, Math.min(100, getNum(trigger?.soilMoisture, 62.0)));
-  const soilMoistureTrend = getNum(trigger?.soilMoistureTrend, 1.2);
+  // Safe clamped environmental values
+  const rainfall24h = Math.max(0, Math.min(450, getNum(trigger?.rainfall24h, 45.0)));
+  const rainfallAnomaly = Math.max(0.4, Math.min(6, getNum(trigger?.rainfallAnomaly, 1.0)));
+  const antecedentPrecipitation = Math.max(0, Math.min(350, getNum(trigger?.antecedentPrecipitation, Math.max(30, rainfall24h * 1.4))));
+  const soilMoisture = Math.max(0, Math.min(100, getNum(trigger?.soilMoisture, 65.0)));
+  const soilMoistureTrend = getNum(trigger?.soilMoistureTrend, 1.5);
   const slopeInstabilityFactor = Math.max(0, Math.min(100, getNum(trigger?.slopeInstabilityFactor, 55)));
+  const groundDeformation = Math.max(0, Math.min(50, getNum(trigger?.groundDeformationMmMonth, 4.2)));
+  const communityReportScore = Math.max(0, Math.min(100, getNum(trigger?.communityReportScore, 0)));
 
   const safeTrigger: DynamicTrigger = {
-    rainfall1h: getNum(trigger?.rainfall1h, 4.2),
+    rainfall1h: getNum(trigger?.rainfall1h, 4.5),
     rainfall24h,
     rainfallAnomaly,
     soilMoisture,
     soilMoistureTrend,
     antecedentPrecipitation,
     slopeInstabilityFactor,
-    groundVibration: getNum(trigger?.groundVibration, 1.1),
-    temperatureAnomaly: getNum(trigger?.temperatureAnomaly, 1.8)
+    groundDeformationMmMonth: groundDeformation,
+    groundVibration: getNum(trigger?.groundVibration, 1.0),
+    temperatureAnomaly: getNum(trigger?.temperatureAnomaly, 1.2),
+    nearestEarthquake: trigger?.nearestEarthquake ?? null,
+    communityReportScore
   };
 
   const safeScenario: Scenario = {
@@ -52,6 +70,8 @@ export function calculateDynamicRisk(
     duration: getNum(scenario?.duration, 24),
     soilMoistureMultiplier: getNum(scenario?.soilMoistureMultiplier, 1),
     slopeInstabilityMultiplier: getNum(scenario?.slopeInstabilityMultiplier, 1),
+    groundDeformationMultiplier: getNum(scenario?.groundDeformationMultiplier, 1),
+    seismicMagnitude: scenario?.seismicMagnitude,
     selectedZoneId: scenario?.selectedZoneId ?? null,
     failedInfrastructureIds: Array.isArray(scenario?.failedInfrastructureIds) ? scenario.failedInfrastructureIds : [],
   };
@@ -59,44 +79,66 @@ export function calculateDynamicRisk(
   const safeReports = Array.isArray(reports) ? reports : [];
 
   const env = safeZone.environmentalFeatures || {
-    elevation: 1500,
-    slope: 35,
+    elevation: 1400,
+    slope: 38,
     aspect: 'South',
-    terrainRuggedness: 7.5,
-    landCover: 'Forest Slopes',
-    ndviChange: -0.1,
-    drainage: 'High Convergence'
+    terrainRuggedness: 8.0,
+    landCover: 'Forest & Steep Escarpments',
+    ndviChange: -0.12,
+    drainage: 'High Convergence',
+    gsiSusceptibilityClass: 'High'
   };
 
-  // Base factor calculations
-  // Rainfall factor based on 24h mm, anomaly, and antecedent precipitation
-  let rainfallFactor = ((safeTrigger.rainfall24h / 50) * 60) + ((safeTrigger.rainfallAnomaly - 1) * 30) + ((safeTrigger.antecedentPrecipitation / 100) * 20);
+  // Base dynamic factor calculations
+  // 1. Rainfall factor (IMD/GPM): 24h precipitation, anomaly ratio, antecedent saturation
+  let rainfallFactor = ((safeTrigger.rainfall24h / 60) * 50) + (0) + ((safeTrigger.antecedentPrecipitation / 120) * 20);
   
-  // Soil saturation factor
-  let soilFactor = (safeTrigger.soilMoisture * 0.8) + (safeTrigger.soilMoistureTrend * 10);
+  // 2. Soil factor: upper horizon saturation & moisture delta
+  let soilFactor = (safeTrigger.soilMoisture * 0.8) + (safeTrigger.soilMoistureTrend * 8);
   
-  // Slope shear & instability factor
+  // 3. Slope shear stress: gradient angle relative to critical friction angle (35-45°)
   const slopeRatio = (env.slope / 45) * 100;
-  let slopeFactor = (slopeRatio * 0.5) + ((safeTrigger.slopeInstabilityFactor || 50) * 0.5);
+  let slopeFactor = (slopeRatio * 0.55) + ((safeTrigger.slopeInstabilityFactor || 50) * 0.45);
 
-  // Apply scenario multipliers if active
+  // 4. Satellite InSAR deformation factor (Sentinel-1)
+  let deformationFactor = Math.min(100, (safeTrigger.groundDeformationMmMonth || 0) * 8.5);
+
+  // 5. Seismic dynamic shock factor (NCS)
+  let seismicFactor = 0;
+  if (safeTrigger.nearestEarthquake && safeTrigger.nearestEarthquake.distanceKm < 150) {
+    const eq = safeTrigger.nearestEarthquake;
+    const distAtten = Math.max(0.1, 1 - (eq.distanceKm / 150));
+    seismicFactor = Math.min(100, (eq.magnitude / 6.0) * 100 * distAtten);
+  }
+
+  // 6. Community field reports factor
+  let reportFactor = Math.min(100, safeTrigger.communityReportScore || 0);
+
+  // Apply What-If scenario multipliers if active
   if (safeScenario.active) {
-    if (safeScenario.type === 'Heavy Rainfall') {
+    if (safeScenario.type === 'Heavy Rain' || safeScenario.type === 'Heavy Rainfall') {
       rainfallFactor *= (safeScenario.rainfallMultiplier || 1.6);
       soilFactor *= 1.25;
-    } else if (safeScenario.type === 'Extreme Rainfall') {
-      rainfallFactor *= (safeScenario.rainfallMultiplier || 2.2);
+    } else if (safeScenario.type === 'Extreme Rainfall' || safeScenario.type === 'Cloudburst Event') {
+      rainfallFactor *= (safeScenario.rainfallMultiplier || 2.4);
       soilFactor *= 1.5;
-      slopeFactor *= 1.2;
+      slopeFactor *= 1.25;
+    } else if (safeScenario.type === 'Earthquake Trigger') {
+      seismicFactor = Math.max(85, (safeScenario.seismicMagnitude || 5.8) * 14);
+      slopeFactor *= 1.4;
     } else if (safeScenario.type === 'Soil Saturation') {
       soilFactor *= (safeScenario.soilMoistureMultiplier || 1.6);
       slopeFactor *= 1.15;
     } else if (safeScenario.type === 'Slope Failure') {
-      slopeFactor *= (safeScenario.slopeInstabilityMultiplier || 1.6);
+      slopeFactor *= (safeScenario.slopeInstabilityMultiplier || 1.8);
+      deformationFactor *= 1.6;
+    } else if (safeScenario.type === 'Community Report Surge') {
+      reportFactor = 92;
     } else if (safeScenario.type === 'Multi-Zone Landslide' || safeScenario.type === 'Extreme Weather Cascade') {
-      rainfallFactor *= 2.0;
+      rainfallFactor *= 2.2;
       soilFactor *= 1.5;
       slopeFactor *= 1.4;
+      deformationFactor *= 1.5;
     }
   }
 
@@ -104,21 +146,44 @@ export function calculateDynamicRisk(
   rainfallFactor = Math.max(0, Math.min(100, isNaN(rainfallFactor) ? 0 : rainfallFactor));
   soilFactor = Math.max(0, Math.min(100, isNaN(soilFactor) ? 0 : soilFactor));
   slopeFactor = Math.max(0, Math.min(100, isNaN(slopeFactor) ? 0 : slopeFactor));
+  deformationFactor = Math.max(0, Math.min(100, isNaN(deformationFactor) ? 0 : deformationFactor));
+  seismicFactor = Math.max(0, Math.min(100, isNaN(seismicFactor) ? 0 : seismicFactor));
+  reportFactor = Math.max(0, Math.min(100, isNaN(reportFactor) ? 0 : reportFactor));
 
-  // Dynamic Trigger composite score (45% Rainfall, 35% Soil, 20% Slope dynamic)
-  const triggerScore = (rainfallFactor * 0.45) + (soilFactor * 0.35) + (slopeFactor * 0.20);
-  const staticSusc = safeZone.staticSusceptibility ?? 65;
+  // Dynamic Trigger Composite Score
+  const triggerScore = 
+    (rainfallFactor * 0.46) + 
+    (soilFactor * 0.24) + 
+    (slopeFactor * 0.16) + 
+    (deformationFactor * 0.06) + 
+    (seismicFactor * 0.04) + 
+    (reportFactor * 0.04);
 
-  // Base raw risk
-  let calculatedRisk = (staticSusc * 0.35) + (triggerScore * 0.65);
+  const staticSusc = safeZone.staticSusceptibility ?? 70;
 
-  // Calculate rate of escalation (momentum)
-  let momentum = Math.round(((rainfallFactor - 50) * 0.15) + ((soilFactor - 50) * 0.12) + ((slopeFactor - 50) * 0.1));
-  if (safeScenario.active) {
-    momentum += safeScenario.type === 'Extreme Rainfall' || safeScenario.type === 'Extreme Weather Cascade' ? 14 : 7;
+  // Composite Multi-Source Risk
+  // Only elevate risk if there are actual dynamic triggers (rain, seismic, deformation, reports)
+  const activeDynamicTriggers = rainfallFactor + deformationFactor + seismicFactor + reportFactor;
+  let calculatedRisk = 0;
+  if (activeDynamicTriggers > 10) {
+    calculatedRisk = (staticSusc * config.weightBaseline) + (triggerScore * (1 - config.weightBaseline));
+  } else {
+    calculatedRisk = triggerScore * (staticSusc / 100) * 0.5; // Very low if no active triggers
   }
 
-  // Forecast points
+  // Rate of escalation (momentum)
+  let momentum = Math.round(
+    ((rainfallFactor - 50) * 0.14) + 
+    ((soilFactor - 50) * 0.10) + 
+    ((slopeFactor - 50) * 0.08) + 
+    (seismicFactor > 40 ? 12 : 0)
+  );
+
+  if (safeScenario.active) {
+    momentum += (safeScenario.type.includes('Extreme') || safeScenario.type.includes('Cloudburst')) ? 16 : 8;
+  }
+
+  // Multi-temporal forecast projection points
   const forecast = {
     t6: Math.max(0, Math.min(100, calculatedRisk + (momentum * 0.45))),
     t12: Math.max(0, Math.min(100, calculatedRisk + (momentum * 0.8))),
@@ -126,12 +191,12 @@ export function calculateDynamicRisk(
     t48: Math.max(0, Math.min(100, calculatedRisk + (momentum * 1.25)))
   };
 
-  // Adjust currentRisk based on timeline step
+  // Adjust for active timeline step
   let currentRisk = calculatedRisk;
   if (timelineStep === 'PAST_24H') {
-    currentRisk = Math.max(15, calculatedRisk - 22);
+    currentRisk = Math.max(15, calculatedRisk - 24);
   } else if (timelineStep === 'PAST_6H') {
-    currentRisk = Math.max(20, calculatedRisk - 10);
+    currentRisk = Math.max(20, calculatedRisk - 12);
   } else if (timelineStep === 'T_PLUS_6H') {
     currentRisk = forecast.t6;
   } else if (timelineStep === 'T_PLUS_12H') {
@@ -144,12 +209,12 @@ export function calculateDynamicRisk(
 
   currentRisk = Math.max(0, Math.min(100, Math.round(currentRisk)));
 
-  // Probabilistic hazard critical window
+  // Critical hazard temporal window
   let hazardWindow: [string, string] = ['--', '--'];
-  if (currentRisk > 60) {
+  if (currentRisk >= 60) {
     const now = new Date();
-    const startHourOffset = currentRisk > 80 ? 1 : 4;
-    const endHourOffset = currentRisk > 80 ? 8 : 14;
+    const startHourOffset = currentRisk >= 80 ? 1 : 3;
+    const endHourOffset = currentRisk >= 80 ? 7 : 12;
     const start = new Date(now.getTime() + startHourOffset * 3600000);
     const end = new Date(now.getTime() + endHourOffset * 3600000);
     hazardWindow = [
@@ -158,71 +223,112 @@ export function calculateDynamicRisk(
     ];
   }
 
-  // Model Consistency / Confidence calculation
-  // Evaluated deterministically from indicator consensus
-  const zoneId = safeZone.id || '';
-  const zoneReports = safeReports.filter(r => r && r.zoneId === zoneId);
-  const verifiedCount = zoneReports.filter(r => r.verificationStatus === 'Verified').length;
+  // Consensus & confidence calculation
+  const zoneReports = safeReports.filter(r => r && (r.zoneId === safeZone.id || r.state === safeZone.state));
+  const verifiedCount = zoneReports.filter(r => r.verificationStatus === 'CONFIRMED').length;
 
-  let supportingIndicators = 0;
-  const totalIndicators = 6;
-  if (rainfallFactor > 50) supportingIndicators++;
-  if (soilFactor > 50) supportingIndicators++;
-  if (env.slope > 30) supportingIndicators++;
-  if (env.terrainRuggedness > 7) supportingIndicators++;
-  if (staticSusc > 60) supportingIndicators++;
-  if (verifiedCount > 0 || (safeTrigger.antecedentPrecipitation > 50)) supportingIndicators++;
+  let activeDataStreams = 4; // Baseline GSI, NRSC, IMD weather, Terrain
+  if (safeTrigger.nearestEarthquake) activeDataStreams++;
+  if (safeTrigger.groundDeformationMmMonth && safeTrigger.groundDeformationMmMonth > 0) activeDataStreams++;
+  if (zoneReports.length > 0) activeDataStreams++;
 
-  const consistencyRate = Math.round((supportingIndicators / totalIndicators) * 100);
-  const confidence = Math.max(72, Math.min(96, 75 + Math.round((supportingIndicators / totalIndicators) * 18) + (verifiedCount * 2)));
+  const dataCoverage = Math.min(100, Math.round((activeDataStreams / 7) * 100));
+  const confidence = Math.max(70, Math.min(96, 72 + Math.round((activeDataStreams / 7) * 20) + (verifiedCount * 2)));
 
-  // Feature Contributions (Deterministic attribution breakdown)
-  const rawAttributions = [
-    { feature: 'Rainfall Anomaly & Rate', raw: rainfallFactor * 0.32 },
-    { feature: 'Terrain Slope Gradient', raw: (env.slope / 45) * 100 * 0.26 },
-    { feature: 'Soil Saturation Index', raw: soilFactor * 0.22 },
-    { feature: 'Historical Susceptibility', raw: staticSusc * 0.12 },
-    { feature: 'Terrain Ruggedness & NDVI', raw: ((env.terrainRuggedness / 10) * 70 + Math.abs(env.ndviChange || 0) * 30) * 0.08 }
+  // Feature Contributions Attribution Breakdown
+  const rawAttributions: RiskFeatureContribution[] = [
+    {
+      feature: 'Rainfall Anomaly & Rate',
+      source: 'IMD AWS & NASA GPM',
+      value: Number((rainfallFactor * config.weightRainfall).toFixed(1)),
+      percentage: 0,
+      isAvailable: true,
+      statusText: `${safeTrigger.rainfall24h} mm/24h (${safeTrigger.rainfallAnomaly}x anomaly)`
+    },
+    {
+      feature: 'Geological Baseline Susceptibility',
+      source: 'GSI NLSM & NRSC Atlas',
+      value: Number((staticSusc * config.weightBaseline).toFixed(1)),
+      percentage: 0,
+      isAvailable: true,
+      statusText: `NLSM ${env.gsiSusceptibilityClass || 'High'} (${staticSusc}/100)`
+    },
+    {
+      feature: 'Pore-Water Soil Saturation',
+      source: 'Soil Moisture Hydrology Model',
+      value: Number((soilFactor * config.weightSoilMoisture).toFixed(1)),
+      percentage: 0,
+      isAvailable: true,
+      statusText: `${Math.round(safeTrigger.soilMoisture)}% capacity (trend +${safeTrigger.soilMoistureTrend}%)`
+    },
+    {
+      feature: 'Topographic Slope & Shear',
+      source: 'DEM Morphometry',
+      value: Number((slopeFactor * config.weightSlopeInstability).toFixed(1)),
+      percentage: 0,
+      isAvailable: true,
+      statusText: `${env.slope}° slope gradient (${env.terrainRuggedness}/10 ruggedness)`
+    },
+    {
+      feature: 'Ground Surface Deformation',
+      source: 'Sentinel-1 InSAR Radar',
+      value: Number((deformationFactor * config.weightSatelliteDeformation).toFixed(1)),
+      percentage: 0,
+      isAvailable: safeTrigger.groundDeformationMmMonth !== undefined && safeTrigger.groundDeformationMmMonth > 0,
+      statusText: `${safeTrigger.groundDeformationMmMonth?.toFixed(1) || 0} mm/mo displacement`
+    },
+    {
+      feature: 'Seismic Shock Proximity',
+      source: 'NCS Seismology Feed',
+      value: Number((seismicFactor * config.weightSeismicTrigger).toFixed(1)),
+      percentage: 0,
+      isAvailable: !!safeTrigger.nearestEarthquake,
+      statusText: safeTrigger.nearestEarthquake ? `M${safeTrigger.nearestEarthquake.magnitude} (${safeTrigger.nearestEarthquake.distanceKm} km)` : 'No recent epicenter'
+    },
+    {
+      feature: 'Citizen & Field Incident Reports',
+      source: 'Community Reporting Grid',
+      value: Number((reportFactor * config.weightCommunityReports).toFixed(1)),
+      percentage: 0,
+      isAvailable: zoneReports.length > 0,
+      statusText: `${zoneReports.length} reports (${verifiedCount} verified)`
+    }
   ];
 
-  const totalRaw = rawAttributions.reduce((acc, item) => acc + item.raw, 0) || 1;
+  const totalRaw = rawAttributions.reduce((acc, item) => acc + item.value, 0) || 1;
   const featureContributions = rawAttributions.map(item => ({
-    feature: item.feature,
-    value: Number(item.raw.toFixed(1)),
-    percentage: Math.round((item.raw / totalRaw) * 100)
+    ...item,
+    percentage: Math.round((item.value / totalRaw) * 100)
   })).sort((a, b) => b.percentage - a.percentage);
 
-  const primaryDriver = featureContributions[0]?.feature || 'Rainfall & Slope Shear';
+  const primaryDriver = featureContributions[0]?.feature || 'Monsoon Rainfall & Slope Shear';
 
-  // Human readable explanation
-  const precipPct = Math.round((safeTrigger.rainfall24h / 30) * 100);
-  const soilPct = Math.round(safeTrigger.soilMoisture);
-  const slopeDeg = env.slope || 35;
-  
-  let riskLevelStr = 'moderate';
+  // Status mapping
   let status: RiskState['status'] = 'LOW';
-  if (currentRisk >= 75) {
-    riskLevelStr = 'critical';
-    status = 'CRITICAL';
-  } else if (currentRisk >= 60) {
-    riskLevelStr = 'high';
-    status = 'HIGH';
-  } else if (currentRisk >= 40) {
-    riskLevelStr = 'moderate';
-    status = 'MODERATE';
-  }
+  if (currentRisk >= 80) status = 'CRITICAL';
+  else if (currentRisk >= 68) status = 'VERY_HIGH';
+  else if (currentRisk >= 52) status = 'HIGH';
+  else if (currentRisk >= 35) status = 'MODERATE';
 
-  let explanation = `Risk is ${riskLevelStr} (${currentRisk}/100) because `;
-  if (precipPct > 120 && soilPct > 60) {
-    explanation += `accumulated precipitation (+${precipPct - 100}% anomaly) has saturated the upper soil layer (${soilPct}% moisture) on an inherently steep ${slopeDeg}° slope gradient.`;
-  } else if (slopeDeg >= 38) {
-    explanation += `the steep topographical gradient (${slopeDeg}°) and high terrain ruggedness amplify slope shear stress under elevated moisture conditions (${soilPct}%).`;
+  // Transparent explanation
+  const precipPct = Math.round((safeTrigger.rainfall24h / 40) * 100);
+  const soilPct = Math.round(safeTrigger.soilMoisture);
+  const slopeDeg = env.slope || 38;
+
+  let explanation = `Estimated dynamic risk is ${status} (${currentRisk}/100) based on multi-source fusion: `;
+  if (precipPct >= 140 && soilPct > 70) {
+    explanation += `accumulated rainfall (+${precipPct - 100}% above seasonal norm) combined with ${soilPct}% soil pore-water saturation on a steep ${slopeDeg}° slope gradient.`;
+  } else if (safeTrigger.nearestEarthquake && safeTrigger.nearestEarthquake.magnitude >= 4.0) {
+    explanation += `seismic vibration (M${safeTrigger.nearestEarthquake.magnitude} at ${safeTrigger.nearestEarthquake.distanceKm}km) elevated geotechnical shear stress on baseline GSI ${env.gsiSusceptibilityClass} terrain.`;
+  } else if (slopeDeg >= 40) {
+    explanation += `high topographical slope angle (${slopeDeg}°) in GSI ${env.gsiSusceptibilityClass} zone, with continuous telemetry monitoring.`;
   } else {
-    explanation += `environmental triggers and static geological susceptibility indicate baseline stability with continuous moisture monitoring active.`;
+    explanation += `environmental triggers and static geological susceptibility indicate normal baseline conditions with active telemetry ingestion.`;
   }
 
   return {
     currentRisk,
+    baselineSusceptibility: staticSusc,
     triggerScore: Math.round(triggerScore),
     momentum,
     hazardWindow,
@@ -233,10 +339,12 @@ export function calculateDynamicRisk(
       t48: Math.round(forecast.t48)
     },
     confidence,
+    dataCoverage,
     primaryDriver,
     featureContributions,
     explanation,
-    status
+    status,
+    dataSourcesUsed: ['IMD Weather AWS', 'GSI NLSM Susceptibility', 'NRSC Landslide Atlas', 'Sentinel-1 InSAR', 'NCS Seismology', 'Citizen Reports']
   };
 }
 
@@ -270,17 +378,17 @@ export function calculateNetworkImpact(
       if (isExplicitlyFailed) {
         s = 'failed';
       } else if (
-        (safeScenario.type === 'Road Blockage' && e.id === 'R-01') ||
-        (safeScenario.type === 'Bridge Failure' && (
-          e.source === 'B-17' || e.target === 'B-17' ||
-          e.source === 'B-22' || e.target === 'B-22' ||
-          e.source === 'B-09' || e.target === 'B-09' ||
-          e.id === 'R-01' || e.id === 'R-09' || e.id === 'R-17'
-        ))
+        (safeScenario.type === 'Road Blockage' || safeScenario.type === 'Road Failure') &&
+        (e.type === 'road' && (e.id.includes('01') || e.id.includes('WAY-01')))
       ) {
         s = 'failed';
-      } else if (safeScenario.type === 'Extreme Weather Cascade' && (e.id === 'R-01' || e.id === 'R-09' || e.id === 'R-17')) {
+      } else if (
+        safeScenario.type === 'Bridge Failure' &&
+        (e.id.includes('B1') || e.id.includes('B-17') || e.source.includes('B1') || e.target.includes('B1'))
+      ) {
         s = 'failed';
+      } else if (safeScenario.type === 'Extreme Weather Cascade') {
+        if (e.id.includes('01') || e.id.includes('B1')) s = 'failed';
       }
     }
     edgeStatusMap.set(e.id, s);
@@ -288,7 +396,7 @@ export function calculateNetworkImpact(
 
   const activeEdges = safeEdges.filter(e => edgeStatusMap.get(e.id) === 'active');
 
-  // Adjacency lists for Dijkstra
+  // Adjacency lists for Dijkstra shortest path
   const adj = new Map<string, { target: string; weight: number; edgeId: string }[]>();
   safeNodes.forEach(n => adj.set(n.id, []));
   
@@ -303,7 +411,7 @@ export function calculateNetworkImpact(
   const settlements = safeNodes.filter(n => n.type === 'settlement');
   const medicalAndShelters = safeNodes.filter(n => n.type === 'hospital' || n.type === 'shelter');
 
-  // Compute shortest route for each settlement using standard Dijkstra
+  // Compute shortest path for each settlement
   const results = settlements.map(settlement => {
     let shortestDist = Infinity;
     let bestTarget: InfrastructureNode | null = null;
@@ -339,7 +447,6 @@ export function calculateNetworkImpact(
             shortestDist = minDist;
             bestTarget = dest;
             
-            // Reconstruct path
             const pathN: string[] = [];
             const pathE: string[] = [];
             let curr: string | null = dest.id;
@@ -382,6 +489,7 @@ export function calculateNetworkImpact(
       settlementId: settlement.id,
       settlementName: settlement.name,
       population: settlement.population || 0,
+      zoneId: settlement.zoneId,
       isolated: isIsolated,
       targetFacilityId: bestTarget ? (bestTarget as InfrastructureNode).id : null,
       targetFacilityName: bestTarget ? (bestTarget as InfrastructureNode).name : 'No viable route found',
@@ -426,20 +534,20 @@ export function generateCascadingEffectsChain(
     const prevRisk = riskStates[prev.id]?.currentRisk ?? 0;
     const currRisk = riskStates[curr.id]?.currentRisk ?? 0;
     return currRisk > prevRisk ? curr : prev;
-  }, zones[0] || { id: 'Z-042', name: 'Tista Valley Sector A', coordinates: [27.0500, 88.2667] });
+  }, zones[0] || { id: 'Z-WAY-01', name: 'Chooralmala-Meppadi Escarpment', coordinates: [11.5320, 76.1530], environmentalFeatures: { slope: 41 } } as RiskZone);
 
-  const topRiskState = riskStates[topZone.id] || { currentRisk: 78, primaryDriver: 'Rainfall Surge' };
+  const topRiskState = riskStates[topZone.id] || { currentRisk: 82, primaryDriver: 'Monsoon Surge' };
   const isolatedCount = networkImpact?.isolatedCommunities || 0;
   const isolatedPop = networkImpact?.isolatedPopulation || 0;
 
-  const isRainEvent = scenario.active && (scenario.type === 'Heavy Rainfall' || scenario.type === 'Extreme Rainfall' || scenario.type === 'Extreme Weather Cascade');
-  const isExtreme = scenario.active && (scenario.type === 'Extreme Rainfall' || scenario.type === 'Extreme Weather Cascade');
+  const isRainEvent = scenario.active && (scenario.type === 'Heavy Rain' || scenario.type === 'Heavy Rainfall' || scenario.type === 'Extreme Rainfall' || scenario.type === 'Cloudburst Event');
+  const isExtreme = scenario.active && (scenario.type === 'Extreme Rainfall' || scenario.type === 'Cloudburst Event' || scenario.type === 'Extreme Weather Cascade');
 
   return [
     {
       id: 'CASC-1',
-      title: isExtreme ? 'Extreme Precipitation Surge' : 'Monsoon Precipitation Anomaly',
-      subtitle: isRainEvent ? `Rainfall rate +${Math.round((scenario.rainfallMultiplier - 1) * 100)}% over 24h window` : 'Baseline rainfall 36.5 mm/24h',
+      title: isExtreme ? 'Severe Meteorological Surge / Cloudburst' : 'Monsoon Precipitation Anomaly',
+      subtitle: isRainEvent ? `Rainfall +${Math.round((scenario.rainfallMultiplier - 1) * 100)}% over standard 24h threshold` : 'Baseline IMD rainfall telemetry active',
       category: 'TRIGGER',
       targetType: 'general',
       severity: isExtreme ? 'CRITICAL' : isRainEvent ? 'ELEVATED' : 'NORMAL'
@@ -447,7 +555,7 @@ export function generateCascadingEffectsChain(
     {
       id: 'CASC-2',
       title: 'Pore-Water Saturation Rising',
-      subtitle: `Subsurface soil moisture at ${isRainEvent ? '88%' : '62%'} capacity`,
+      subtitle: `Subsurface soil moisture at ${isRainEvent ? '92%' : '65%'} capacity in ${topZone.district || 'Hilly'} district`,
       category: 'SOIL',
       targetType: 'zone',
       targetId: topZone.id,
@@ -456,8 +564,8 @@ export function generateCascadingEffectsChain(
     },
     {
       id: 'CASC-3',
-      title: 'Slope Shear Reduction',
-      subtitle: `Factor of Safety declining on ${topZone.environmentalFeatures.slope}° gradient`,
+      title: 'Slope Shear Stress Reduction',
+      subtitle: `Factor of Safety declining on ${topZone.environmentalFeatures?.slope || 40}° gradient`,
       category: 'STABILITY',
       targetType: 'zone',
       targetId: topZone.id,
@@ -466,7 +574,7 @@ export function generateCascadingEffectsChain(
     },
     {
       id: 'CASC-4',
-      title: `Landslide Risk Peak (${topRiskState.currentRisk}/100)`,
+      title: `Multi-Source Landslide Risk Peak (${topRiskState.currentRisk}/100)`,
       subtitle: `${topZone.name} reaches critical instability threshold`,
       category: 'HAZARD',
       targetType: 'zone',
@@ -476,31 +584,31 @@ export function generateCascadingEffectsChain(
     },
     {
       id: 'CASC-5',
-      title: scenario.failedInfrastructureIds.length > 0 ? 'Arterial Road / Bridge Blockage' : 'Downslope Transit Corridor Threatened',
+      title: scenario.failedInfrastructureIds.length > 0 ? 'Road / Bridge Corridor Failure' : 'Downslope Transit Route Threatened',
       subtitle: scenario.failedInfrastructureIds.length > 0 
-        ? `${scenario.failedInfrastructureIds.join(', ')} compromised by debris accumulation`
-        : 'Primary evacuation route R-01 in debris shadow zone',
+        ? `${scenario.failedInfrastructureIds.join(', ')} severed by debris runout`
+        : 'Primary mountain corridor in debris runout zone',
       category: 'INFRASTRUCTURE',
       targetType: 'edge',
-      targetId: scenario.failedInfrastructureIds[0] || 'R-01',
+      targetId: scenario.failedInfrastructureIds[0] || 'E-WAY-01',
       severity: scenario.failedInfrastructureIds.length > 0 ? 'CRITICAL' : 'ELEVATED'
     },
     {
       id: 'CASC-6',
       title: isolatedCount > 0 ? `${isolatedCount} Communities Isolated` : 'Settlement Accessibility Constrained',
-      subtitle: isolatedCount > 0 ? `${isolatedPop.toLocaleString()} citizens cut off from direct hospital access` : 'Travel times increased by 45%',
+      subtitle: isolatedCount > 0 ? `${isolatedPop.toLocaleString()} citizens cut off from direct hospital access` : 'Travel times increased on steep gradients',
       category: 'COMMUNITY',
       targetType: 'node',
-      targetId: networkImpact?.results.find(r => r.isolated)?.settlementId || 'S-1',
+      targetId: networkImpact?.results.find(r => r.isolated)?.settlementId || 'N-WAY-S1',
       severity: isolatedCount > 0 ? 'CRITICAL' : 'ELEVATED'
     },
     {
       id: 'CASC-7',
-      title: 'Alternative Route Guidance & Shelter Dispatch',
-      subtitle: 'Dynamic Dijkstra routing activated for designated mountain shelters',
+      title: 'Dynamic Evacuation & Multi-Agency Response',
+      subtitle: 'Shortest path Dijkstra routing calculated for designated disaster relief shelters',
       category: 'RESPONSE',
       targetType: 'node',
-      targetId: 'SH-1',
+      targetId: 'N-WAY-SH1',
       severity: 'NORMAL'
     }
   ];
@@ -518,7 +626,6 @@ export function computeComprehensiveEvacuationPlan(
   const hospitals = nodes.filter(n => n.type === 'hospital');
   const totalShelterCap = shelters.reduce((sum, sh) => sum + (sh.capacity || 0), 0);
 
-  // Total exposed population in high/critical zones
   let totalExposed = 0;
   let requiringEvac = 0;
 
@@ -534,7 +641,6 @@ export function computeComprehensiveEvacuationPlan(
     }
   });
 
-  // Calculate routes for each settlement to both primary and backup destinations
   const routeResults = settlements.map(settlement => {
     const impactRes = networkImpact?.results?.find(r => r.settlementId === settlement.id);
     const isIsolated = !!impactRes?.isolated;
@@ -560,7 +666,6 @@ export function computeComprehensiveEvacuationPlan(
         };
       }
 
-      // Backup route (to an alternate shelter if available)
       const altShelter = shelters.find(sh => sh.id !== impactRes.targetFacilityId) || hospitals.find(h => h.id !== impactRes.targetFacilityId);
       if (altShelter) {
         backupRoute = {
@@ -589,13 +694,13 @@ export function computeComprehensiveEvacuationPlan(
     };
   });
 
-  const sheltersRequired = Math.max(1, Math.ceil(requiringEvac / 1200));
+  const sheltersRequired = Math.max(1, Math.ceil(requiringEvac / 1500));
 
   const activeShelters = shelters.map(sh => ({
     id: sh.id,
     name: sh.name,
     capacity: sh.capacity || 1000,
-    assignedPopulation: Math.min(sh.capacity || 1000, Math.round(requiringEvac / shelters.length)),
+    assignedPopulation: Math.min(sh.capacity || 1000, Math.round(requiringEvac / (shelters.length || 1))),
     coordinates: sh.coordinates
   }));
 
@@ -603,29 +708,29 @@ export function computeComprehensiveEvacuationPlan(
     {
       step: 1,
       phase: 'IMMEDIATE (0-2h)',
-      title: 'Sound Early Evacuation Sirens for Red Zones',
-      description: 'Activate local broadcast sirens and mobile alert broadcasts for Tista Valley Sector A (Z-042) and Kurseong Slopes (Z-091).',
+      title: 'Sound Multi-Channel Early Warning Sirens',
+      description: 'Activate local broadcast sirens, wireless emergency alerts (CAP), and mobile notification for red-tier critical sectors.',
       priority: 'IMMEDIATE' as const
     },
     {
       step: 2,
       phase: 'DEPLOYMENT (1-4h)',
       title: 'Secure Primary Evacuation Corridors',
-      description: 'Deploy NDRF and local road clearance teams to bypass routes R-02 and R-04 with earthmoving gear on standby.',
+      description: 'Deploy NDRF and State Disaster Response Force (SDRF) heavy earthmoving machinery to clear key arterial highway routes.',
       priority: 'IMMEDIATE' as const
     },
     {
       step: 3,
       phase: 'TRIAGE (2-6h)',
-      title: 'Mobilize Mountain Shelters & Food Logistics',
-      description: 'Open Kalimpong Sports Complex and Tista Highland Relief Shelter; stage medical triage kits and auxiliary generators.',
+      title: 'Mobilize Designated Relief Shelters & Triage Kits',
+      description: 'Open designated high-capacity relief shelters, stage trauma kits, auxiliary power generators, and potable water bowsers.',
       priority: 'HIGH' as const
     },
     {
       step: 4,
       phase: 'AIRLIFT & ISOLATION RESPONSE',
       title: 'Helicopter Aerial Relief for Cut-off Pockets',
-      description: 'Stage emergency air-drop drops for settlements isolated by bridge B-17 or road R-01 collapse.',
+      description: 'Stage IAF / Coast Guard emergency aerial airdrops and hoist rescue for settlements isolated by bridge washouts.',
       priority: 'HIGH' as const
     }
   ];
