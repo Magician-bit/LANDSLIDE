@@ -178,7 +178,7 @@ export default function AIWorkspace({ intel, onNavigateToLiveMap, onNavigateToRe
           <div className="flex items-center gap-2 mb-1">
             {analysisStatus === 'ENHANCED' ? (
               <span className="font-mono text-xs uppercase px-2 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-800 font-bold">
-                GEMINI ENHANCED
+                GEMINI VISION ANALYSIS
               </span>
             ) : analysisStatus === 'LOCAL' ? (
               <span className="font-mono text-xs uppercase px-2 py-0.5 rounded bg-blue-950 text-blue-400 border border-blue-800 font-bold">
@@ -186,7 +186,7 @@ export default function AIWorkspace({ intel, onNavigateToLiveMap, onNavigateToRe
               </span>
             ) : (
               <span className="font-mono text-xs uppercase px-2 py-0.5 rounded bg-purple-950 text-purple-400 border border-purple-800 font-bold">
-                MULTIMODAL VISION
+                AI GEOTECHNICAL ASSESSMENT
               </span>
             )}
             <span className="text-xs text-slate-500 font-mono">
@@ -222,11 +222,26 @@ export default function AIWorkspace({ intel, onNavigateToLiveMap, onNavigateToRe
             return (
               <div
                 key={sample.id}
-                onClick={() => {
+                onClick={async () => {
                   setSelectedImage(sample.thumbnail);
                   setImageTitle(sample.title);
                   setLocationName(sample.location);
-                  runAnalysis(sample.thumbnail);
+                  setIsAnalyzing(true);
+                  setAnalysisStatus('ANALYZING');
+                  try {
+                    const response = await fetch(sample.thumbnail);
+                    const blob = await response.blob();
+                    const reader = new FileReader();
+                    reader.onloadend = () => {
+                      const dataUrl = reader.result as string;
+                      setSelectedImage(dataUrl);
+                      setTimeout(() => runAnalysis(dataUrl), 10);
+                    };
+                    reader.readAsDataURL(blob);
+                  } catch (err) {
+                    console.error("Failed to load sample image bytes", err);
+                    setTimeout(() => runAnalysis(sample.thumbnail), 10);
+                  }
                 }}
                 className={`p-2.5 rounded-xl border transition-all cursor-pointer flex gap-3 items-center ${
                   isSelected

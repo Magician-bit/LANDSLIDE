@@ -88,10 +88,16 @@ export const submitReport = async (report: any): Promise<ApiSourceResponse<any>>
 };
 
 export const analyzeImage = async (imgData: string, locationContext: string, zoneName?: string, state?: string): Promise<ApiSourceResponse<any>> => {
+  let mimeType = 'image/jpeg';
+  const match = imgData.match(/^data:(image\/[a-zA-Z0-9]+);base64,/);
+  if (match) {
+    mimeType = match[1];
+  }
+
   const res = await apiFetch(`/api/analyze-image`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ imageBase64: imgData, locationContext, zoneName, state })
+    body: JSON.stringify({ imageBase64: imgData, mimeType, locationContext, zoneName, state })
   });
   if (res.ok) {
     return { status: 'LIVE', source: 'Gemini 2.5 Flash', timestamp: new Date().toISOString(), data: res.data };

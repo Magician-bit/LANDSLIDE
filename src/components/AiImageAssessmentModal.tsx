@@ -129,14 +129,33 @@ export default function AiImageAssessmentModal({
     }
   };
 
-  const loadPreset = (preset: typeof SAMPLE_PRESETS[0]) => {
-    setSelectedImage(preset.imageUrl);
+  const loadPreset = async (preset: typeof SAMPLE_PRESETS[0]) => {
     setImageFileName(preset.title);
     setSelectedZoneId(preset.zoneId);
     setCustomLocationName(preset.locationName);
     setAnalysisResult(null);
     setSubmittedSuccessfully(false);
-    setTimeout(() => runAiAssessment(preset.imageUrl), 10);
+    
+    // Temporarily set the image URL for immediate UI feedback
+    setSelectedImage(preset.imageUrl);
+    setIsAnalyzing(true);
+    setAnalysisStatus('ANALYZING');
+    
+    try {
+      const response = await fetch(preset.imageUrl);
+      const blob = await response.blob();
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const dataUrl = reader.result as string;
+        setSelectedImage(dataUrl);
+        setTimeout(() => runAiAssessment(dataUrl), 10);
+      };
+      reader.readAsDataURL(blob);
+    } catch (err) {
+      console.error("Failed to load preset image bytes", err);
+      // Fallback
+      setTimeout(() => runAiAssessment(preset.imageUrl), 10);
+    }
   };
 
   const runAiAssessment = async (imgToAnalyze?: string) => {
@@ -220,11 +239,11 @@ export default function AiImageAssessmentModal({
                 </h2>
                 {analysisStatus === 'ENHANCED' ? (
                   <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-emerald-950 text-emerald-300 border border-emerald-800">
-                    GEMINI ENHANCED
+                    GEMINI VISION ANALYSIS
                   </span>
                 ) : analysisStatus === 'LOCAL' ? (
                   <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-blue-950 text-blue-300 border border-blue-800">
-                    LOCAL ANALYSIS
+                    LOCAL VISUAL ASSESSMENT
                   </span>
                 ) : (
                   <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-purple-950 text-purple-300 border border-purple-800">
