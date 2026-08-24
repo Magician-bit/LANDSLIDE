@@ -1,6 +1,9 @@
 import { analyzeLandslide } from '../../server/lib/ai';
 
 export const handler = async (event: any) => {
+  console.log('[Gemini Vision] Function invoked');
+  console.log(`[Gemini Vision] Method: ${event.httpMethod || 'UNKNOWN'}`);
+
   if (event.httpMethod !== 'POST') {
     return { 
       statusCode: 405, 
@@ -30,7 +33,10 @@ export const handler = async (event: any) => {
     }
 
     const rawImage = body.image || body.imageBase64;
-    if (!rawImage || typeof rawImage !== 'string' || !rawImage.trim()) {
+    const hasImage = Boolean(rawImage && typeof rawImage === 'string' && rawImage.trim());
+    console.log(`[Gemini Vision] Image received: ${hasImage}`);
+
+    if (!hasImage) {
       return { 
         statusCode: 400, 
         headers: { 'Content-Type': 'application/json' },
@@ -47,6 +53,10 @@ export const handler = async (event: any) => {
     if (match) {
       mimeType = match[1];
     }
+
+    console.log(`[Gemini Vision] MIME type: ${mimeType}`);
+    console.log(`[Gemini Vision] Base64 length: ${rawImage.length}`);
+    console.log(`[Gemini Vision] Gemini API key configured: ${Boolean(process.env.GEMINI_API_KEY)}`);
 
     const result = await analyzeLandslide(
       rawImage, 
@@ -73,6 +83,7 @@ export const handler = async (event: any) => {
       body: JSON.stringify(result) 
     };
   } catch (e: any) {
+    console.error(`[Gemini Vision] Function error: ${e?.message || e}`);
     return { 
       statusCode: 500, 
       headers: { 'Content-Type': 'application/json' },

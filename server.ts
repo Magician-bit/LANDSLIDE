@@ -18,6 +18,7 @@ app.get('/api/health', (req, res) => {
   res.json({ 
     status: 'ok', 
     geminiConfigured: Boolean(process.env.GEMINI_API_KEY),
+    function: 'analyze-image',
     timestamp: new Date().toISOString() 
   });
 });

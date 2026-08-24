@@ -87,7 +87,7 @@ export const submitReport = async (report: any): Promise<ApiSourceResponse<any>>
   return { status: 'OFFLINE', source: 'Supabase Database', timestamp: new Date().toISOString(), data: null, error: res.error };
 };
 
-export const getHealth = async (): Promise<{ status: string; geminiConfigured: boolean; timestamp?: string }> => {
+export const getHealth = async (): Promise<{ status: string; geminiConfigured: boolean; function?: string; timestamp?: string }> => {
   const res = await apiFetch('/api/health');
   if (res.ok && res.data) {
     return res.data;

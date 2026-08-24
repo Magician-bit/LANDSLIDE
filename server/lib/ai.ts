@@ -57,6 +57,7 @@ export async function analyzeLandslide(
     }
     
     console.log(`[Gemini Vision] request started | MIME: ${cleanMime} | Base64 Length: ${cleanBase64.length} chars | Location: ${locationContext || zoneName || 'N/A'}`);
+    console.log('[Gemini Vision] Calling Gemini 2.5 Flash');
 
     const prompt = `You are a Senior Geotechnical Engineer and Disaster Response Specialist analyzing the actual photograph supplied by the user.
 
@@ -165,7 +166,7 @@ Respond strictly in JSON according to the schema.`;
       }
     };
   } catch (err: any) {
-    console.error('[Gemini Vision] Gemini error:', err?.message || err);
+    console.error('[Gemini Vision] Gemini request failed:', err?.message || err);
     return { 
       success: false, 
       error: 'AI_ANALYSIS_FAILED', 
