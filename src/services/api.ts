@@ -87,20 +87,30 @@ export const submitReport = async (report: any): Promise<ApiSourceResponse<any>>
   return { status: 'OFFLINE', source: 'Supabase Database', timestamp: new Date().toISOString(), data: null, error: res.error };
 };
 
-export const analyzeImage = async (imgData: string, locationContext: string, zoneName?: string, state?: string): Promise<ApiSourceResponse<any>> => {
-  let mimeType = 'image/jpeg';
-  const match = imgData.match(/^data:(image\/[a-zA-Z0-9]+);base64,/);
+export const analyzeImage = async (imgData: string, locationContext: string, zoneName?: string, state?: string, explicitMimeType?: string): Promise<ApiSourceResponse<any>> => {
+  let mimeType = explicitMimeType || 'image/jpeg';
+  const match = imgData.match(/^data:([^;]+);base64,/);
   if (match) {
     mimeType = match[1];
   }
 
+  const cleanBase64 = imgData.replace(/^data:[^;]+;base64,/, '').trim();
+
   const res = await apiFetch(`/api/analyze-image`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ imageBase64: imgData, mimeType, locationContext, zoneName, state })
+    body: JSON.stringify({ 
+      image: cleanBase64, 
+      imageBase64: cleanBase64, 
+      mimeType, 
+      locationContext, 
+      zoneName, 
+      state 
+    })
   });
-  if (res.ok) {
+  if (res.ok && res.data?.success) {
     return { status: 'LIVE', source: 'Gemini 2.5 Flash', timestamp: new Date().toISOString(), data: res.data };
   }
-  return { status: 'OFFLINE', source: 'Gemini 2.5 Flash', timestamp: new Date().toISOString(), data: null, error: res.error };
+  return { status: 'OFFLINE', source: 'Gemini 2.5 Flash', timestamp: new Date().toISOString(), data: null, error: res.error || res.data?.message || 'GEMINI_UNAVAILABLE' };
 };
+

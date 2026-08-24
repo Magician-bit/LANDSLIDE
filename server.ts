@@ -69,11 +69,13 @@ app.post('/api/reports', async (req, res) => {
 });
 
 app.post('/api/analyze-image', async (req, res) => {
-  const { imageBase64, mimeType, locationContext, zoneName, state } = req.body;
-  if (!imageBase64) return res.status(400).json({ error: 'imageBase64 required' });
-  const result = await analyzeLandslide(imageBase64, mimeType, locationContext, zoneName, state);
+  const { image, imageBase64, mimeType, locationContext, zoneName, state } = req.body;
+  const img = image || imageBase64;
+  if (!img) return res.status(400).json({ success: false, error: 'NO_IMAGE_PROVIDED', message: 'image or imageBase64 required' });
+  const result = await analyzeLandslide(img, mimeType || 'image/jpeg', locationContext || '', zoneName || '', state || '');
   return res.status(result.success ? 200 : 500).json(result);
 });
+
 
 // VITE & STATIC SERVING INTEGRATION
 async function bootstrap() {

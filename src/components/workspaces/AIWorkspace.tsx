@@ -69,46 +69,50 @@ export default function AIWorkspace({ intel, onNavigateToLiveMap, onNavigateToRe
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > 10 * 1024 * 1024) {
+      if (file.size > 15 * 1024 * 1024) {
         setAnalysisStatus('ERROR');
-        setAnalysisError('Image too large. Please select a smaller file.');
+        setAnalysisError('Image too large (max 15MB). Please select a smaller file.');
         return;
       }
       
+      setSelectedImage(null);
+      setAnalysisResult(null);
+      setImageTitle(file.name);
+      setDispatchedToGrid(false);
+      setAnalysisError('');
+      setIsAnalyzing(true);
+      setAnalysisStatus('ANALYZING');
+
+      const mimeType = file.type || 'image/jpeg';
       const reader = new FileReader();
       reader.onload = (event) => {
-        const img = new Image();
-        img.onload = () => {
-          const canvas = document.createElement('canvas');
-          let width = img.width;
-          let height = img.height;
-          const MAX = 1200;
-          if (width > height && width > MAX) { height *= MAX/width; width = MAX; }
-          else if (height > MAX) { width *= MAX/height; height = MAX; }
-          canvas.width = width; canvas.height = height;
-          canvas.getContext('2d')?.drawImage(img, 0, 0, width, height);
-          setSelectedImage(canvas.toDataURL('image/jpeg', 0.8));
-          setAnalysisResult(null);
-          setTimeout(() => runAnalysis(canvas.toDataURL('image/jpeg', 0.8)), 10);
-        };
-        img.src = event.target?.result as string;
+        const dataUrl = event.target?.result as string;
+        setSelectedImage(dataUrl);
+        runAnalysis(dataUrl, mimeType);
       };
       reader.readAsDataURL(file);
     }
   };
 
   // Run AI Assessment
-  const runAnalysis = async (imgData: string) => {
+  const runAnalysis = async (imgData: string, explicitMimeType?: string) => {
     setIsAnalyzing(true);
     setAnalysisResult(null);
     setAnalysisStatus('ANALYZING');
     setDispatchedToGrid(false);
+    setAnalysisError('');
 
     const reqToken = Math.random().toString(36).substring(7);
     setActiveRequestToken(reqToken);
 
     try {
-      const res = await analyzeLandslideImage(imgData, locationName || intel?.selectedZone?.name || '', intel?.selectedZone?.name, intel?.selectedZone?.state);
+      const res = await analyzeLandslideImage(
+        imgData, 
+        locationName || intel?.selectedZone?.name || '', 
+        intel?.selectedZone?.name, 
+        intel?.selectedZone?.state,
+        explicitMimeType
+      );
       
       if (activeRequestToken !== reqToken && activeRequestToken !== null) {
         // A newer request has been made, discard this one
@@ -123,10 +127,10 @@ export default function AIWorkspace({ intel, onNavigateToLiveMap, onNavigateToRe
       } else {
         setAnalysisResult(null);
       }
-    } catch {
+    } catch (err: any) {
       if (activeRequestToken === reqToken || activeRequestToken === null) {
         setAnalysisStatus('ERROR');
-        setAnalysisError('Unknown failure');
+        setAnalysisError(err?.message || 'Vision analysis failed');
         setAnalysisResult(null);
       }
     } finally {
@@ -135,6 +139,7 @@ export default function AIWorkspace({ intel, onNavigateToLiveMap, onNavigateToRe
       }
     }
   };
+
 
   // Convert to Field Report
   const handleConvertToReport = () => {
@@ -148,12 +153,13 @@ export default function AIWorkspace({ intel, onNavigateToLiveMap, onNavigateToRe
       locationName: `${imageTitle} - ${locationName}`,
       type: analysisResult.hazardType || 'Tension Cracks & Slope Shear',
       severity: analysisResult.severity,
-      description: `${analysisResult.sceneClassification}. ${analysisResult.visualEvidence.join(' ')}`,
+      description: `${analysisResult.sceneClassification}. ${analysisResult.visibleEvidence.join(' ')}`,
       imageUrl: selectedImage
     });
 
     setDispatchedToGrid(true);
   };
+
 
   const getSeverityBadge = (level: string) => {
     switch (level) {
@@ -218,14 +224,17 @@ export default function AIWorkspace({ intel, onNavigateToLiveMap, onNavigateToRe
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           {SAMPLE_SLOPE_IMAGES.map((sample) => {
-            const isSelected = selectedImage === sample.thumbnail;
+            const isSelected = selectedImage === sample.thumbnail || imageTitle === sample.title;
             return (
               <div
                 key={sample.id}
                 onClick={async () => {
-                  setSelectedImage(sample.thumbnail);
+                  setSelectedImage(null);
+                  setAnalysisResult(null);
                   setImageTitle(sample.title);
                   setLocationName(sample.location);
+                  setDispatchedToGrid(false);
+                  setAnalysisError('');
                   setIsAnalyzing(true);
                   setAnalysisStatus('ANALYZING');
                   try {
@@ -235,12 +244,14 @@ export default function AIWorkspace({ intel, onNavigateToLiveMap, onNavigateToRe
                     reader.onloadend = () => {
                       const dataUrl = reader.result as string;
                       setSelectedImage(dataUrl);
-                      setTimeout(() => runAnalysis(dataUrl), 10);
+                      runAnalysis(dataUrl, blob.type || 'image/jpeg');
                     };
                     reader.readAsDataURL(blob);
                   } catch (err) {
                     console.error("Failed to load sample image bytes", err);
-                    setTimeout(() => runAnalysis(sample.thumbnail), 10);
+                    setAnalysisStatus('ERROR');
+                    setAnalysisError('Failed to load demo image data.');
+                    setIsAnalyzing(false);
                   }
                 }}
                 className={`p-2.5 rounded-xl border transition-all cursor-pointer flex gap-3 items-center ${
@@ -249,6 +260,7 @@ export default function AIWorkspace({ intel, onNavigateToLiveMap, onNavigateToRe
                     : 'bg-slate-900 border-slate-800 hover:border-slate-700'
                 }`}
               >
+
                 <img
                   src={sample.thumbnail}
                   alt={sample.title}
@@ -402,19 +414,19 @@ export default function AIWorkspace({ intel, onNavigateToLiveMap, onNavigateToRe
                 </div>
 
                 {/* Key Observations */}
-                {(analysisResult.visualEvidence?.length > 0 || analysisResult.negativeEvidence?.length > 0) && (
+                {((analysisResult.visibleEvidence && analysisResult.visibleEvidence.length > 0) || (analysisResult.negativeEvidence && analysisResult.negativeEvidence.length > 0)) && (
                   <div className="space-y-1.5">
                     <div className="text-xs font-mono font-bold text-slate-300">
                       Visual Evidence Identified:
                     </div>
                     <ul className="space-y-1">
-                      {analysisResult.visualEvidence?.map((obs, i) => (
+                      {analysisResult.visibleEvidence?.map((obs: string, i: number) => (
                         <li key={`pos-${i}`} className="text-xs text-slate-300 flex items-start gap-2">
                           <span className="w-1.5 h-1.5 rounded-full bg-purple-400 mt-1.5 shrink-0"></span>
                           <span>{obs}</span>
                         </li>
                       ))}
-                      {analysisResult.negativeEvidence?.map((obs, i) => (
+                      {analysisResult.negativeEvidence?.map((obs: string, i: number) => (
                         <li key={`neg-${i}`} className="text-xs text-slate-400 flex items-start gap-2">
                           <span className="w-1.5 h-1.5 rounded-full bg-slate-600 mt-1.5 shrink-0"></span>
                           <span>{obs}</span>
@@ -423,6 +435,7 @@ export default function AIWorkspace({ intel, onNavigateToLiveMap, onNavigateToRe
                     </ul>
                   </div>
                 )}
+
 
                 {/* Action Recommendations */}
                 {analysisResult.recommendedActions?.length > 0 && (

@@ -11,9 +11,10 @@ import {
   MapPin,
   RefreshCw,
   FileCheck,
-  Send
+  Send,
+  EyeOff
 } from 'lucide-react';
-import { RiskZone, IncidentSeverity, IncidentType } from '../types';
+import { RiskZone } from '../types';
 import { analyzeLandslideImage, AiVisionResult } from '../services/ai/vision';
 
 interface AiImageAssessmentModalProps {
@@ -86,58 +87,40 @@ export default function AiImageAssessmentModal({
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > 10 * 1024 * 1024) {
+      if (file.size > 15 * 1024 * 1024) {
         setAnalysisStatus('ERROR');
-        setAnalysisError('Image too large (max 10MB). Please select a smaller file.');
+        setAnalysisError('Image too large (max 15MB). Please select a smaller file.');
         return;
       }
+      // Instantly clear all previous state
+      setSelectedImage(null);
+      setAnalysisResult(null);
       setImageFileName(file.name);
+      setSubmittedSuccessfully(false);
+      setAnalysisError('');
+      setIsAnalyzing(true);
+      setAnalysisStatus('ANALYZING');
+
+      const mimeType = file.type || 'image/jpeg';
       const reader = new FileReader();
       reader.onload = (event) => {
-        const img = new Image();
-        img.onload = () => {
-          const canvas = document.createElement('canvas');
-          const MAX_WIDTH = 1200;
-          const MAX_HEIGHT = 1200;
-          let width = img.width;
-          let height = img.height;
-
-          if (width > height) {
-            if (width > MAX_WIDTH) {
-              height *= MAX_WIDTH / width;
-              width = MAX_WIDTH;
-            }
-          } else {
-            if (height > MAX_HEIGHT) {
-              width *= MAX_HEIGHT / height;
-              height = MAX_HEIGHT;
-            }
-          }
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext('2d');
-          ctx?.drawImage(img, 0, 0, width, height);
-          const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.8);
-          setSelectedImage(compressedDataUrl);
-          setAnalysisResult(null);
-          setSubmittedSuccessfully(false);
-          setTimeout(() => runAiAssessment(compressedDataUrl), 10);
-        };
-        img.src = event.target?.result as string;
+        const dataUrl = event.target?.result as string;
+        setSelectedImage(dataUrl);
+        runAiAssessment(dataUrl, mimeType);
       };
       reader.readAsDataURL(file);
     }
   };
 
   const loadPreset = async (preset: typeof SAMPLE_PRESETS[0]) => {
+    // Instantly clear previous state
+    setSelectedImage(null);
+    setAnalysisResult(null);
     setImageFileName(preset.title);
     setSelectedZoneId(preset.zoneId);
     setCustomLocationName(preset.locationName);
-    setAnalysisResult(null);
     setSubmittedSuccessfully(false);
-    
-    // Temporarily set the image URL for immediate UI feedback
-    setSelectedImage(preset.imageUrl);
+    setAnalysisError('');
     setIsAnalyzing(true);
     setAnalysisStatus('ANALYZING');
     
@@ -148,22 +131,24 @@ export default function AiImageAssessmentModal({
       reader.onloadend = () => {
         const dataUrl = reader.result as string;
         setSelectedImage(dataUrl);
-        setTimeout(() => runAiAssessment(dataUrl), 10);
+        runAiAssessment(dataUrl, blob.type || 'image/jpeg');
       };
       reader.readAsDataURL(blob);
     } catch (err) {
       console.error("Failed to load preset image bytes", err);
-      // Fallback
-      setTimeout(() => runAiAssessment(preset.imageUrl), 10);
+      setAnalysisStatus('ERROR');
+      setAnalysisError('Failed to fetch demo image data.');
+      setIsAnalyzing(false);
     }
   };
 
-  const runAiAssessment = async (imgToAnalyze?: string) => {
+  const runAiAssessment = async (imgToAnalyze?: string, explicitMimeType?: string) => {
     const img = imgToAnalyze || selectedImage;
     if (!img) return;
     setIsAnalyzing(true);
     setAnalysisStatus('ANALYZING');
     setSubmittedSuccessfully(false);
+    setAnalysisError('');
 
     const zone = zones.find((z) => z.id === selectedZoneId) || currentZone || zones[0];
     const locContext = `Observed at ${customLocationName} in ${zone?.district || 'Western Ghats / Himalayas'}`;
@@ -172,22 +157,23 @@ export default function AiImageAssessmentModal({
     setActiveRequestToken(reqToken);
 
     try {
-      const res = await analyzeLandslideImage(img, locContext, "", "");
+      const res = await analyzeLandslideImage(img, locContext, zone?.name, zone?.state, explicitMimeType);
       
       if (activeRequestToken !== reqToken && activeRequestToken !== null) {
         return;
       }
       
       setAnalysisStatus(res.status);
+      if (res.error) setAnalysisError(res.error);
       if ((res.status === 'LOCAL' || res.status === 'ENHANCED') && res.result) {
         setAnalysisResult(res.result);
       } else {
         setAnalysisResult(null);
       }
-    } catch {
+    } catch (err: any) {
       if (activeRequestToken === reqToken || activeRequestToken === null) {
         setAnalysisStatus('ERROR');
-        setAnalysisError('Unknown failure');
+        setAnalysisError(err?.message || 'Vision analysis failed');
         setAnalysisResult(null);
       }
     } finally {
@@ -211,11 +197,11 @@ export default function AiImageAssessmentModal({
         zoneId: zone?.id,
         type: analysisResult.hazardType || 'Slope Failure',
         severity: analysisResult.severity,
-        description: `[AI Vision Assessment: ${analysisResult.confidence}% Confidence] ${analysisResult.sceneClassification}. Evidence: ${analysisResult.visualEvidence.join(', ')}.`,
+        description: `[AI Vision Assessment: ${analysisResult.confidence !== null ? `${analysisResult.confidence}%` : 'Visual'} Confidence] ${analysisResult.sceneClassification}. Evidence: ${analysisResult.visibleEvidence.join(', ')}.`,
         imageUrl: selectedImage || undefined,
-        affectedRoad: analysisResult.estimatedAffectedInfrastructure.some(i => i.toLowerCase().includes('road')),
-        affectedBuilding: analysisResult.estimatedAffectedInfrastructure.some(i => i.toLowerCase().includes('building') || i.toLowerCase().includes('settlement')),
-        riverBlocked: analysisResult.estimatedAffectedInfrastructure.some(i => i.toLowerCase().includes('river') || i.toLowerCase().includes('drain')),
+        affectedRoad: analysisResult.visibleEvidence.some(i => i.toLowerCase().includes('road')),
+        affectedBuilding: analysisResult.visibleEvidence.some(i => i.toLowerCase().includes('building') || i.toLowerCase().includes('settlement')),
+        riverBlocked: analysisResult.visibleEvidence.some(i => i.toLowerCase().includes('river') || i.toLowerCase().includes('drain')),
         peopleTrapped: false,
         evacuationRequired: analysisResult.severity === 'CRITICAL' || analysisResult.severity === 'HIGH'
       });
@@ -238,16 +224,20 @@ export default function AiImageAssessmentModal({
                   AI Landslide Image Assessment
                 </h2>
                 {analysisStatus === 'ENHANCED' ? (
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-emerald-950 text-emerald-300 border border-emerald-800">
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-emerald-950 text-emerald-300 border border-emerald-800">
                     GEMINI VISION ANALYSIS
                   </span>
                 ) : analysisStatus === 'LOCAL' ? (
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-blue-950 text-blue-300 border border-blue-800">
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-blue-950 text-blue-300 border border-blue-800">
                     LOCAL VISUAL ASSESSMENT
                   </span>
+                ) : analysisStatus === 'ERROR' ? (
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-red-950 text-red-300 border border-red-800">
+                    GEMINI ANALYSIS FAILED
+                  </span>
                 ) : (
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-purple-950 text-purple-300 border border-purple-800">
-                    MULTIMODAL VISION
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-purple-950 text-purple-300 border border-purple-800">
+                    AI GEOTECHNICAL ASSESSMENT
                   </span>
                 )}
               </div>
@@ -258,7 +248,7 @@ export default function AiImageAssessmentModal({
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
           >
             <X size={20} />
           </button>
@@ -273,7 +263,7 @@ export default function AiImageAssessmentModal({
                 <Camera size={14} className="text-purple-400" />
                 Quick Test Samples (DEMO CASE STUDIES)
               </span>
-              <span className="text-[11px] text-slate-500">Or drag &amp; drop your own file below</span>
+              <span className="text-[11px] text-slate-500">Or upload your own image below</span>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
               {SAMPLE_PRESETS.map((preset) => (
@@ -281,7 +271,7 @@ export default function AiImageAssessmentModal({
                   key={preset.id}
                   type="button"
                   onClick={() => loadPreset(preset)}
-                  className={`p-2.5 rounded-xl border text-left flex items-center gap-3 transition-all ${
+                  className={`p-2.5 rounded-xl border text-left flex items-center gap-3 transition-all cursor-pointer ${
                     imageFileName === preset.title
                       ? 'bg-purple-950/40 border-purple-500 text-purple-200 shadow-md'
                       : 'bg-slate-950/70 border-slate-800 hover:border-slate-700 text-slate-300'
@@ -325,7 +315,7 @@ export default function AiImageAssessmentModal({
                     </span>{' '}
                     <span className="text-xs text-slate-400">or drag and drop</span>
                   </div>
-                  <span className="text-[11px] text-slate-500">PNG, JPG, WEBP up to 10MB</span>
+                  <span className="text-[11px] text-slate-500">PNG, JPG, WEBP up to 15MB</span>
                   <input type="file" accept="image/*" onChange={handleFileUpload} className="hidden" />
                 </label>
               )}
@@ -375,7 +365,7 @@ export default function AiImageAssessmentModal({
                 type="button"
                 disabled={!selectedImage || isAnalyzing}
                 onClick={() => runAiAssessment()}
-                className={`w-full py-2.5 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all shadow-md ${
+                className={`w-full py-2.5 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all shadow-md cursor-pointer ${
                   !selectedImage
                     ? 'bg-slate-800 text-slate-500 cursor-not-allowed'
                     : isAnalyzing
@@ -386,7 +376,7 @@ export default function AiImageAssessmentModal({
                 {isAnalyzing ? (
                   <>
                     <RefreshCw size={15} className="animate-spin" />
-                    Extracting Morphological Features...
+                    Extracting Visual Morphology...
                   </>
                 ) : (
                   <>
@@ -398,16 +388,16 @@ export default function AiImageAssessmentModal({
             </div>
           </div>
 
-          {/* Results Display */}
+          {/* Error Display */}
           {analysisStatus === 'ERROR' && !isAnalyzing && (
-            <div className="bg-slate-950 border border-slate-800 rounded-xl p-8 text-center text-slate-400">
-              <AlertTriangle size={36} className="mx-auto text-amber-500 mb-3" />
-              <div className="font-bold text-white text-lg">AI ANALYSIS FAILED</div>
-              <p className="mt-2 text-sm max-w-md mx-auto">{analysisError}</p>
+            <div className="bg-slate-950 border border-red-900/50 rounded-xl p-6 text-center text-slate-400">
+              <AlertTriangle size={32} className="mx-auto text-red-400 mb-2" />
+              <div className="font-bold text-white text-base">AI ANALYSIS FAILED</div>
+              <p className="mt-1 text-xs max-w-md mx-auto text-red-300/80">{analysisError || 'Could not analyze image.'}</p>
             </div>
           )}
-          
 
+          {/* Results Display */}
           {analysisResult && (
             <div className="bg-slate-950 border border-purple-500/40 rounded-xl p-5 space-y-4 shadow-xl animate-fadeIn">
               {/* Header Status */}
@@ -422,92 +412,99 @@ export default function AiImageAssessmentModal({
                           ? 'bg-orange-950 text-orange-400 border border-orange-800'
                           : analysisResult.severity === 'MODERATE'
                           ? 'bg-yellow-950 text-yellow-400 border border-yellow-800'
-                          : 'bg-blue-950 text-blue-400 border border-blue-800'
+                          : analysisResult.severity === 'LOW'
+                          ? 'bg-blue-950 text-blue-400 border border-blue-800'
+                          : 'bg-emerald-950 text-emerald-400 border border-emerald-800'
                       }`}
                     >
                       {analysisResult.severity} Severity
                     </span>
-                    {analysisResult.confidence !== null && (
-                      <span className="text-xs font-mono text-purple-400 font-bold">
-                        Confidence: {analysisResult.confidence}%
-                      </span>
-                    )}
+                    <span className="text-xs font-mono text-purple-400 font-bold">
+                      Confidence: {analysisResult.confidence !== null ? `${analysisResult.confidence}%` : 'UNCERTAIN'}
+                    </span>
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-900 text-slate-400 border border-slate-800">
+                      {analysisResult.assessment}
+                    </span>
                   </div>
                   <h3 className="text-sm sm:text-base font-bold text-white mt-1">
                     {analysisResult.hazardDetected ? analysisResult.hazardType : 'No Visible Hazard'}
                   </h3>
                 </div>
 
-                <div className="bg-slate-900 border border-slate-800 px-3.5 py-2 rounded-xl text-right max-w-[200px]">
-                  <div className="text-[10px] font-mono text-slate-400 uppercase">Scene Classification</div>
+                <div className="bg-slate-900 border border-slate-800 px-3.5 py-2 rounded-xl text-right max-w-[240px]">
+                  <div className="text-[10px] font-mono text-slate-400 uppercase">Diagnosis</div>
                   <div className="text-xs font-bold text-slate-200 mt-0.5 truncate" title={analysisResult.sceneClassification}>
                     {analysisResult.sceneClassification}
                   </div>
                 </div>
               </div>
 
-              {/* Detected Feature Breakdown */}
-              {(analysisResult.visualEvidence.length > 0 || analysisResult.negativeEvidence.length > 0) && (
-                <div>
-                  <div className="text-[11px] font-mono text-slate-400 uppercase tracking-wider mb-2">
-                    Computer Vision Morphological Indicators
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {analysisResult.visualEvidence.map((feat, idx) => (
-                      <div
-                        key={`pos-${idx}`}
-                        className="p-2.5 rounded-lg border text-xs bg-purple-950/30 border-purple-800/60 text-slate-200"
-                      >
-                        <div className="flex items-center gap-1.5 font-bold mb-1">
-                          <CheckCircle2 size={13} className="text-purple-400" />
-                          <span>Detected Feature</span>
-                        </div>
-                        <p className="text-[11px] text-slate-400 leading-snug">{feat}</p>
-                      </div>
-                    ))}
-                    {analysisResult.negativeEvidence.map((feat, idx) => (
-                      <div
-                        key={`neg-${idx}`}
-                        className="p-2.5 rounded-lg border text-xs bg-slate-900/60 border-slate-800 text-slate-500"
-                      >
-                        <div className="flex items-center gap-1.5 font-bold mb-1">
-                          <X size={13} className="text-slate-600" />
-                          <span>Absence Confirmed</span>
-                        </div>
-                        <p className="text-[11px] text-slate-400 leading-snug">{feat}</p>
-                      </div>
-                    ))}
-                  </div>
+              {/* Visual Evidence Section */}
+              <div className="space-y-2">
+                <div className="text-[11px] font-mono text-slate-400 uppercase tracking-wider">
+                  Visual Evidence Identified in Uploaded Image
                 </div>
-              )}
-
-              {/* Downstream Hazard Assessment & Recommendations */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
-                {analysisResult.immediateRisks.length > 0 && (
-                  <div className="p-3 rounded-lg bg-slate-900 border border-slate-800">
-                    <div className="font-bold text-slate-300 mb-1 flex items-center gap-1.5">
-                      <ShieldAlert size={14} className="text-amber-400" />
-                      Immediate Risks
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {analysisResult.visibleEvidence.map((feat, idx) => (
+                    <div
+                      key={`pos-${idx}`}
+                      className="p-2.5 rounded-lg border text-xs bg-purple-950/20 border-purple-800/50 text-slate-200"
+                    >
+                      <div className="flex items-center gap-1.5 font-bold mb-0.5 text-purple-300">
+                        <CheckCircle2 size={13} className="text-purple-400 shrink-0" />
+                        <span>Visible Characteristic</span>
+                      </div>
+                      <p className="text-[11px] text-slate-300 leading-snug">{feat}</p>
                     </div>
-                    <ul className="space-y-1 text-slate-400 list-disc list-inside">
-                      {analysisResult.immediateRisks.map((r, i) => <li key={i}>{r}</li>)}
-                    </ul>
+                  ))}
+                  {analysisResult.negativeEvidence.map((feat, idx) => (
+                    <div
+                      key={`neg-${idx}`}
+                      className="p-2.5 rounded-lg border text-xs bg-slate-900/60 border-slate-800 text-slate-400"
+                    >
+                      <div className="flex items-center gap-1.5 font-bold mb-0.5 text-slate-400">
+                        <EyeOff size={13} className="text-slate-500 shrink-0" />
+                        <span>Negative Evidence</span>
+                      </div>
+                      <p className="text-[11px] text-slate-400 leading-snug">{feat}</p>
+                    </div>
+                  ))}
+                  {analysisResult.visibleEvidence.length === 0 && analysisResult.negativeEvidence.length === 0 && (
+                    <div className="col-span-2 text-xs text-slate-500 italic p-3 bg-slate-900 rounded-lg">
+                      No distinct physical hazard features detected in frame.
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Recommendations & Geotechnical Metrics */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                <div className="p-3 rounded-lg bg-slate-900 border border-slate-800">
+                  <div className="font-bold text-slate-300 mb-1 flex items-center gap-1.5">
+                    <FileCheck size={14} className="text-blue-400" />
+                    Recommended Actions
                   </div>
-                )}
-
-                {analysisResult.recommendedActions.length > 0 && (
-                  <div className="p-3 rounded-lg bg-slate-900 border border-slate-800">
-                    <div className="font-bold text-slate-300 mb-1 flex items-center gap-1.5">
-                      <FileCheck size={14} className="text-blue-400" />
-                      Operational Recommendations
-                    </div>
-                    <ul className="space-y-1 text-slate-400 list-disc list-inside">
+                  {analysisResult.recommendedActions.length > 0 ? (
+                    <ul className="space-y-1 text-slate-400 list-disc list-inside text-[11px]">
                       {analysisResult.recommendedActions.map((rec, i) => (
                         <li key={i}>{rec}</li>
                       ))}
                     </ul>
+                  ) : (
+                    <p className="text-[11px] text-slate-500">No immediate remediation required.</p>
+                  )}
+                </div>
+
+                <div className="p-3 rounded-lg bg-slate-900 border border-slate-800 space-y-2">
+                  <div className="font-bold text-slate-300 flex items-center gap-1.5">
+                    <Info size={14} className="text-amber-400" />
+                    Geotechnical Parameters
                   </div>
-                )}
+                  <div className="text-[11px] space-y-1 text-slate-400 font-mono">
+                    <div>Velocity: <span className="text-slate-300">{analysisResult.estimatedVelocity || 'NOT DETERMINABLE FROM IMAGE'}</span></div>
+                    <div>Volume: <span className="text-slate-300">{analysisResult.estimatedVolume || 'NOT DETERMINABLE FROM IMAGE'}</span></div>
+                  </div>
+                </div>
               </div>
 
               {/* Action Buttons */}
@@ -517,7 +514,7 @@ export default function AiImageAssessmentModal({
                     if (onSelectZone) onSelectZone(selectedZoneId);
                     onClose();
                   }}
-                  className="px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-300 hover:bg-slate-800 border border-slate-700 transition-colors"
+                  className="px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-300 hover:bg-slate-800 border border-slate-700 transition-colors cursor-pointer"
                 >
                   Locate Zone on GIS Map
                 </button>
@@ -531,7 +528,7 @@ export default function AiImageAssessmentModal({
                   <button
                     onClick={handleSendToFieldQueue}
                     disabled={!analysisResult.hazardDetected}
-                    className={`px-4 py-2 rounded-xl text-xs font-bold shadow-md flex items-center gap-1.5 transition-colors ${
+                    className={`px-4 py-2 rounded-xl text-xs font-bold shadow-md flex items-center gap-1.5 transition-colors cursor-pointer ${
                       !analysisResult.hazardDetected 
                         ? 'bg-slate-800 text-slate-500 cursor-not-allowed'
                         : 'bg-emerald-600 hover:bg-emerald-500 text-white'
@@ -549,3 +546,4 @@ export default function AiImageAssessmentModal({
     </div>
   );
 }
+

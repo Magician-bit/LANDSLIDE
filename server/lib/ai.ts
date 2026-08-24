@@ -13,79 +13,136 @@ function getGenAI(): GoogleGenAI | null {
   return genAIClient;
 }
 
-export async function analyzeLandslide(imageBase64: string, mimeType: string, locationContext: string, zoneName: string, state: string) {
+export async function analyzeLandslide(
+  imageBase64: string, 
+  mimeType: string = 'image/jpeg', 
+  locationContext?: string, 
+  zoneName?: string, 
+  state?: string
+) {
   const ai = getGenAI();
   if (!ai) {
-    return { success: false, aiLive: false, error: 'GEMINI_API_KEY_NOT_CONFIGURED', message: 'Gemini API key is not configured.' };
+    return { 
+      success: false, 
+      aiLive: false, 
+      error: 'GEMINI_API_KEY_NOT_CONFIGURED', 
+      message: 'Gemini API key is not configured.' 
+    };
   }
 
   try {
-    const cleanBase64 = imageBase64.replace(/^data:image\/[a-z]+;base64,/, '');
+    // Strip data URL scheme if present and get raw clean base64
+    const cleanBase64 = imageBase64.replace(/^data:[^;]+;base64,/, '').trim();
+    if (!cleanBase64) {
+      return {
+        success: false,
+        error: 'EMPTY_IMAGE_DATA',
+        message: 'No image data was provided.'
+      };
+    }
     
-    // Hash the base64 for debugging
+    // Compute simple arithmetic hash of bytes to log distinct requests
     let hash = 0;
-    for (let i = 0; i < cleanBase64.length; i++) {
+    for (let i = 0; i < Math.min(cleanBase64.length, 1000); i++) {
       hash = Math.imul(31, hash) + cleanBase64.charCodeAt(i) | 0;
     }
     console.log(`[GEMINI REQUEST] Image Hash: ${hash}, MIME: ${mimeType}, Base64 Length: ${cleanBase64.length}`);
 
-    const prompt = `You are a Senior Geotechnical Engineer and Disaster Response Specialist.
-You are analyzing the uploaded photograph itself.
-Do not assume that the image contains a landslide.
-Do not use information from previous images.
-Do not use a demo result.
-Do not infer the answer from the filename.
-Inspect the actual visual content of this image.
-Determine whether there is visible evidence consistent with:
-- landslide
-- rockfall
-- debris flow
-- mud/debris accumulation
-- slope failure
-- road obstruction
-- erosion
-- exposed unstable soil
-- normal terrain
-- normal roadway
-- vegetation-covered stable terrain
+    const prompt = `You are a Senior Geotechnical Engineer and Disaster Response Specialist analyzing the actual photograph supplied by the user.
 
-If there is no visible evidence of a landslide, say so.
-If the image is ambiguous, say UNCERTAIN.
-Only report characteristics that are visually supported by the uploaded image.
-DO NOT fabricate geotechnical measurements like volume, velocity, slope angle, depth, etc., unless those values can genuinely be determined from the image (which is rare). Otherwise return "NOT DETERMINABLE FROM IMAGE".
+Determine whether there is visible evidence of a landslide, rockfall, debris flow, slope failure, erosion, road obstruction, or other geotechnical hazard.
 
-Respond strictly in JSON matching the following schema.`;
+Do not assume a landslide exists.
+
+If the scene appears normal, stable, or unrelated to geotechnical hazards (such as an indoor room, normal street, intact roadway, or tranquil landscape), explicitly state that there is no clear visual evidence of a landslide.
+
+Base every conclusion ONLY on what is visibly present in the supplied image.
+
+Do not use the filename, previous images, demo cases, previous analysis, or external assumptions.
+
+Describe the actual visual evidence that led to the assessment.
+
+Provide realistic, non-fabricated assessments:
+- If the image is blurry, corrupted, or unreadable, set assessment to "UNCERTAIN" and explain in visibleEvidence.
+- Set estimatedVelocity and estimatedVolume strictly to "NOT DETERMINABLE FROM IMAGE" unless there are clear visual measurement markers.
+- For normal/benign scenes, assessment must be "NO_CLEAR_LANDSLIDE_EVIDENCE", severity "LOW" or "NONE", and hazardType "NO_VISIBLE_HAZARD".
+
+Respond strictly in JSON according to the schema.`;
 
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
       contents: [
-          { inlineData: { data: cleanBase64, mimeType: mimeType || 'image/jpeg' } },
-          { text: prompt }
-        ],
+        { inlineData: { data: cleanBase64, mimeType: mimeType || 'image/jpeg' } },
+        { text: prompt }
+      ],
       config: {
         responseMimeType: 'application/json',
         responseSchema: {
           type: Type.OBJECT,
           properties: {
-            assessment: { type: Type.STRING, description: 'NO_CLEAR_LANDSLIDE, POSSIBLE_LANDSLIDE, LIKELY_LANDSLIDE, or UNCERTAIN' },
-            severity: { type: Type.STRING, description: 'NONE, LOW, MODERATE, HIGH, CRITICAL, or UNCERTAIN' },
-            confidence: { type: Type.NUMBER, description: 'Visual assessment confidence between 0 and 100' },
-            hazardType: { type: Type.STRING, description: 'Specific geological hazard type identified or NO_VISIBLE_HAZARD' },
-            visibleEvidence: { type: Type.ARRAY, items: { type: Type.STRING }, description: 'Observed physical geological features actually visible in the image' },
-            negativeEvidence: { type: Type.ARRAY, items: { type: Type.STRING }, description: 'Evidence explaining why this might NOT be a hazard' },
-            estimatedVolume: { type: Type.STRING, description: 'Set to "NOT DETERMINABLE FROM IMAGE" unless actually measurable' },
-            estimatedVelocity: { type: Type.STRING, description: 'Set to "NOT DETERMINABLE FROM IMAGE" unless actually measurable' },
-            immediateRisks: { type: Type.ARRAY, items: { type: Type.STRING }, description: 'Immediate risks to population or infrastructure' },
-            recommendedActions: { type: Type.ARRAY, items: { type: Type.STRING }, description: 'Recommended actions' },
-            summary: { type: Type.STRING, description: 'Concise 2-3 sentence geotechnical diagnosis based ONLY on this image' }
+            assessment: { 
+              type: Type.STRING, 
+              description: 'Must be one of: NO_CLEAR_LANDSLIDE_EVIDENCE, POSSIBLE_LANDSLIDE, LIKELY_LANDSLIDE, or UNCERTAIN' 
+            },
+            severity: { 
+              type: Type.STRING, 
+              description: 'Must be one of: NONE, LOW, MODERATE, HIGH, CRITICAL, or UNCERTAIN' 
+            },
+            hazardType: { 
+              type: Type.STRING, 
+              description: 'Specific hazard observed (e.g., Debris Flow, Rockfall, Mudslide, Road Obstruction, Tension Crack, or NO_VISIBLE_HAZARD)' 
+            },
+            confidence: { 
+              type: Type.NUMBER, 
+              description: 'Visual assessment confidence score between 0 and 100' 
+            },
+            visibleEvidence: { 
+              type: Type.ARRAY, 
+              items: { type: Type.STRING }, 
+              description: 'Specific physical features visible in the photo (e.g. intact paved road, disturbed vegetation, rock debris on asphalt, etc.)' 
+            },
+            negativeEvidence: { 
+              type: Type.ARRAY, 
+              items: { type: Type.STRING }, 
+              description: 'Visual indicators that rule out active hazards (e.g. intact lane markings, stable vegetation, lack of scarp)' 
+            },
+            recommendedActions: { 
+              type: Type.ARRAY, 
+              items: { type: Type.STRING }, 
+              description: 'Realistic operational recommendations based on what is visible' 
+            },
+            limitations: { 
+              type: Type.ARRAY, 
+              items: { type: Type.STRING }, 
+              description: 'Geotechnical limitations of 2D single photo analysis' 
+            },
+            estimatedVelocity: { 
+              type: Type.STRING, 
+              description: 'Must be "NOT DETERMINABLE FROM IMAGE"' 
+            },
+            estimatedVolume: { 
+              type: Type.STRING, 
+              description: 'Must be "NOT DETERMINABLE FROM IMAGE"' 
+            }
           },
-          required: ['assessment', 'severity', 'confidence', 'hazardType', 'visibleEvidence', 'negativeEvidence', 'estimatedVolume', 'estimatedVelocity', 'immediateRisks', 'recommendedActions', 'summary']
+          required: [
+            'assessment', 
+            'severity', 
+            'hazardType', 
+            'confidence', 
+            'visibleEvidence', 
+            'negativeEvidence', 
+            'recommendedActions', 
+            'limitations', 
+            'estimatedVelocity', 
+            'estimatedVolume'
+          ]
         }
       }
     });
 
     const parsedJson = JSON.parse(response.text || '{}');
-    console.log(`[GEMINI RESPONSE] Image Hash: ${hash}, Assessment: ${parsedJson.assessment}`);
+    console.log(`[GEMINI RESPONSE] Image Hash: ${hash}, Assessment: ${parsedJson.assessment}, Severity: ${parsedJson.severity}`);
     
     return {
       success: true,
@@ -102,3 +159,4 @@ Respond strictly in JSON matching the following schema.`;
     return { success: false, error: 'AI_ANALYSIS_FAILED', message: err.message };
   }
 }
+
