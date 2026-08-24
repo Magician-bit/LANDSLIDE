@@ -38,12 +38,10 @@ Respond strictly in JSON matching the following schema. If the image doesn't sho
 
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
-      contents: {
-        parts: [
+      contents: [
           { inlineData: { data: cleanBase64, mimeType: mimeType || 'image/jpeg' } },
           { text: prompt }
-        ]
-      },
+        ],
       config: {
         responseMimeType: 'application/json',
         responseSchema: {

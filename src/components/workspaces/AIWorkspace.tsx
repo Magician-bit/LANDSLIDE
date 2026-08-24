@@ -59,7 +59,8 @@ export default function AIWorkspace({ intel, onNavigateToLiveMap, onNavigateToRe
   const [locationName, setLocationName] = useState<string>('');
   const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
   const [analysisId, setAnalysisId] = useState<string | null>(null);
-  const [analysisStatus, setAnalysisStatus] = useState<'IDLE' | 'ANALYZING' | 'LIVE' | 'OFFLINE'>('IDLE');
+  const [analysisStatus, setAnalysisStatus] = useState<'IDLE' | 'ANALYZING' | 'LOCAL' | 'ENHANCED' | 'ERROR'>('IDLE');
+  const [analysisError, setAnalysisError] = useState<string>('');
   const [dispatchedToGrid, setDispatchedToGrid] = useState<boolean>(false);
   const [analysisResult, setAnalysisResult] = useState<AiVisionResult | null>(null);
   const [activeRequestToken, setActiveRequestToken] = useState<string | null>(null);
@@ -68,14 +69,29 @@ export default function AIWorkspace({ intel, onNavigateToLiveMap, onNavigateToRe
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      if (file.size > 10 * 1024 * 1024) {
+        setAnalysisStatus('ERROR');
+        setAnalysisError('Image too large. Please select a smaller file.');
+        return;
+      }
+      
       const reader = new FileReader();
-      reader.onload = () => {
-        if (typeof reader.result === 'string') {
-          setSelectedImage(reader.result);
-          setImageTitle(file.name.replace(/\.[^/.]+$/, ''));
-          setLocationName(intel?.selectedZone?.name || 'Field Upload');
-          runAnalysis(reader.result);
-        }
+      reader.onload = (event) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+          const MAX = 1200;
+          if (width > height && width > MAX) { height *= MAX/width; width = MAX; }
+          else if (height > MAX) { width *= MAX/height; height = MAX; }
+          canvas.width = width; canvas.height = height;
+          canvas.getContext('2d')?.drawImage(img, 0, 0, width, height);
+          setSelectedImage(canvas.toDataURL('image/jpeg', 0.8));
+          setAnalysisResult(null);
+          setTimeout(() => runAnalysis(canvas.toDataURL('image/jpeg', 0.8)), 10);
+        };
+        img.src = event.target?.result as string;
       };
       reader.readAsDataURL(file);
     }
@@ -99,8 +115,9 @@ export default function AIWorkspace({ intel, onNavigateToLiveMap, onNavigateToRe
         return;
       }
 
-      setAnalysisStatus(res.status as 'LIVE' | 'OFFLINE');
-      if (res.status === 'LIVE' && res.result) {
+      setAnalysisStatus(res.status);
+      if (res.error) setAnalysisError(res.error);
+      if ((res.status === 'LOCAL' || res.status === 'ENHANCED') && res.result) {
         setAnalysisResult(res.result);
         setAnalysisId(`AI-${new Date().toISOString().replace(/\D/g,'').slice(0, 14)}`);
       } else {
@@ -108,7 +125,8 @@ export default function AIWorkspace({ intel, onNavigateToLiveMap, onNavigateToRe
       }
     } catch {
       if (activeRequestToken === reqToken || activeRequestToken === null) {
-        setAnalysisStatus('OFFLINE');
+        setAnalysisStatus('ERROR');
+        setAnalysisError('Unknown failure');
         setAnalysisResult(null);
       }
     } finally {
@@ -158,17 +176,17 @@ export default function AIWorkspace({ intel, onNavigateToLiveMap, onNavigateToRe
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-800 pb-5">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            {analysisStatus === 'LIVE' ? (
+            {analysisStatus === 'ENHANCED' ? (
               <span className="font-mono text-xs uppercase px-2 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-800 font-bold">
-                LIVE MODEL: GEMINI 2.5 FLASH
+                GEMINI ENHANCED
               </span>
-            ) : analysisStatus === 'OFFLINE' ? (
-              <span className="font-mono text-xs uppercase px-2 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700 font-bold">
-                AI OFFLINE
+            ) : analysisStatus === 'LOCAL' ? (
+              <span className="font-mono text-xs uppercase px-2 py-0.5 rounded bg-blue-950 text-blue-400 border border-blue-800 font-bold">
+                LOCAL VISUAL ANALYSIS
               </span>
             ) : (
               <span className="font-mono text-xs uppercase px-2 py-0.5 rounded bg-purple-950 text-purple-400 border border-purple-800 font-bold">
-                GEMINI 2.5 FLASH MULTIMODAL
+                MULTIMODAL VISION
               </span>
             )}
             <span className="text-xs text-slate-500 font-mono">
@@ -310,12 +328,13 @@ export default function AIWorkspace({ intel, onNavigateToLiveMap, onNavigateToRe
                 <div className="w-8 h-8 border-2 border-slate-500 border-t-transparent rounded-full animate-spin"></div>
                 <div className="text-sm font-mono">PROCESSING IMAGE...</div>
               </div>
-            ) : analysisStatus === 'OFFLINE' ? (
+            ) : analysisStatus === 'ERROR' ? (
               <div className="p-8 text-center text-slate-400 text-sm border border-slate-800 rounded-xl bg-slate-950 mt-4">
                 <AlertTriangle size={32} className="mx-auto text-amber-500 mb-3" />
-                <div className="font-bold text-white text-base">AI ANALYSIS UNAVAILABLE</div>
-                <p className="mt-2 text-xs">The Gemini API backend is unavailable or not configured. Cannot process image.</p>
+                <div className="font-bold text-white text-base">AI ANALYSIS FAILED</div>
+                <p className="mt-2 text-xs">{analysisError}</p>
               </div>
+            
             ) : analysisResult ? (
               <div className="space-y-4 pt-4">
                 {/* Structural Parameters Grid */}
@@ -330,7 +349,7 @@ export default function AIWorkspace({ intel, onNavigateToLiveMap, onNavigateToRe
                   <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 col-span-2 sm:col-span-1">
                     <div className="text-[10px] uppercase font-mono text-slate-500">Confidence</div>
                     <div className="text-sm font-bold text-purple-400 font-mono mt-0.5">
-                      {analysisResult.confidence}%
+                      {analysisResult.confidence !== null ? `${analysisResult.confidence}%` : 'N/A'}
                     </div>
                   </div>
                 </div>

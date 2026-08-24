@@ -14,7 +14,13 @@ export const apiFetch = async (endpoint: string, options?: RequestInit) => {
     const response = await fetch(url, options);
     
     if (!response.ok) {
-      return { ok: false, data: null, error: `HTTP_${response.status}` };
+      let errStr = `HTTP_${response.status}`;
+      try {
+        const errBody = await response.json();
+        if (errBody.message) errStr = errBody.message;
+        if (errBody.error) errStr = errBody.error;
+      } catch (e) {}
+      return { ok: false, data: null, error: errStr };
     }
     
     const contentType = response.headers.get('content-type');

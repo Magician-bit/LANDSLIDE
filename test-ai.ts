@@ -1,0 +1,3 @@
+import { GoogleGenAI, Type } from '@google/genai';
+const ai = new GoogleGenAI({ apiKey: 'fake' });
+console.log(typeof ai.models.generateContent);

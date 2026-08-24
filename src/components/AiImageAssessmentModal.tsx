@@ -64,7 +64,8 @@ export default function AiImageAssessmentModal({
   const [imageFileName, setImageFileName] = useState<string>('');
   const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
   const [analysisResult, setAnalysisResult] = useState<AiVisionResult | null>(null);
-  const [analysisStatus, setAnalysisStatus] = useState<'IDLE' | 'ANALYZING' | 'LIVE' | 'OFFLINE'>('IDLE');
+  const [analysisStatus, setAnalysisStatus] = useState<'IDLE' | 'ANALYZING' | 'LOCAL' | 'ENHANCED' | 'ERROR'>('IDLE');
+  const [analysisError, setAnalysisError] = useState<string>('');
   const [selectedZoneId, setSelectedZoneId] = useState<string>(currentZone?.id || zones[0]?.id || '');
   const [customLocationName, setCustomLocationName] = useState<string>(
     currentZone ? `${currentZone.name}, ${currentZone.district}` : 'Wayanad Sector'
@@ -85,13 +86,44 @@ export default function AiImageAssessmentModal({
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      if (file.size > 10 * 1024 * 1024) {
+        setAnalysisStatus('ERROR');
+        setAnalysisError('Image too large (max 10MB). Please select a smaller file.');
+        return;
+      }
       setImageFileName(file.name);
       const reader = new FileReader();
-      reader.onload = () => {
-        setSelectedImage(reader.result as string);
-        setAnalysisResult(null);
-        setAnalysisStatus('IDLE');
-        setSubmittedSuccessfully(false);
+      reader.onload = (event) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const MAX_WIDTH = 1200;
+          const MAX_HEIGHT = 1200;
+          let width = img.width;
+          let height = img.height;
+
+          if (width > height) {
+            if (width > MAX_WIDTH) {
+              height *= MAX_WIDTH / width;
+              width = MAX_WIDTH;
+            }
+          } else {
+            if (height > MAX_HEIGHT) {
+              width *= MAX_HEIGHT / height;
+              height = MAX_HEIGHT;
+            }
+          }
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx?.drawImage(img, 0, 0, width, height);
+          const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.8);
+          setSelectedImage(compressedDataUrl);
+          setAnalysisResult(null);
+          setSubmittedSuccessfully(false);
+          setTimeout(() => runAiAssessment(compressedDataUrl), 10);
+        };
+        img.src = event.target?.result as string;
       };
       reader.readAsDataURL(file);
     }
@@ -103,13 +135,13 @@ export default function AiImageAssessmentModal({
     setSelectedZoneId(preset.zoneId);
     setCustomLocationName(preset.locationName);
     setAnalysisResult(null);
-    setAnalysisStatus('IDLE');
     setSubmittedSuccessfully(false);
+    setTimeout(() => runAiAssessment(preset.imageUrl), 10);
   };
 
-  const runAiAssessment = async () => {
-    if (!selectedImage) return;
-
+  const runAiAssessment = async (imgToAnalyze?: string) => {
+    const img = imgToAnalyze || selectedImage;
+    if (!img) return;
     setIsAnalyzing(true);
     setAnalysisStatus('ANALYZING');
     setSubmittedSuccessfully(false);
@@ -121,21 +153,22 @@ export default function AiImageAssessmentModal({
     setActiveRequestToken(reqToken);
 
     try {
-      const res = await analyzeLandslideImage(selectedImage, locContext, "", "");
+      const res = await analyzeLandslideImage(img, locContext, "", "");
       
       if (activeRequestToken !== reqToken && activeRequestToken !== null) {
         return;
       }
       
-      setAnalysisStatus(res.status as 'LIVE' | 'OFFLINE');
-      if (res.status === 'LIVE' && res.result) {
+      setAnalysisStatus(res.status);
+      if ((res.status === 'LOCAL' || res.status === 'ENHANCED') && res.result) {
         setAnalysisResult(res.result);
       } else {
         setAnalysisResult(null);
       }
     } catch {
       if (activeRequestToken === reqToken || activeRequestToken === null) {
-        setAnalysisStatus('OFFLINE');
+        setAnalysisStatus('ERROR');
+        setAnalysisError('Unknown failure');
         setAnalysisResult(null);
       }
     } finally {
@@ -185,13 +218,13 @@ export default function AiImageAssessmentModal({
                 <h2 className="text-base font-bold text-white tracking-wide">
                   AI Landslide Image Assessment
                 </h2>
-                {analysisStatus === 'LIVE' ? (
+                {analysisStatus === 'ENHANCED' ? (
                   <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-emerald-950 text-emerald-300 border border-emerald-800">
-                    LIVE MODEL: GEMINI
+                    GEMINI ENHANCED
                   </span>
-                ) : analysisStatus === 'OFFLINE' ? (
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-slate-800 text-slate-400 border border-slate-700">
-                    AI OFFLINE
+                ) : analysisStatus === 'LOCAL' ? (
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-blue-950 text-blue-300 border border-blue-800">
+                    LOCAL ANALYSIS
                   </span>
                 ) : (
                   <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-purple-950 text-purple-300 border border-purple-800">
@@ -322,7 +355,7 @@ export default function AiImageAssessmentModal({
               <button
                 type="button"
                 disabled={!selectedImage || isAnalyzing}
-                onClick={runAiAssessment}
+                onClick={() => runAiAssessment()}
                 className={`w-full py-2.5 px-4 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all shadow-md ${
                   !selectedImage
                     ? 'bg-slate-800 text-slate-500 cursor-not-allowed'
@@ -347,13 +380,14 @@ export default function AiImageAssessmentModal({
           </div>
 
           {/* Results Display */}
-          {analysisStatus === 'OFFLINE' && !isAnalyzing && (
+          {analysisStatus === 'ERROR' && !isAnalyzing && (
             <div className="bg-slate-950 border border-slate-800 rounded-xl p-8 text-center text-slate-400">
               <AlertTriangle size={36} className="mx-auto text-amber-500 mb-3" />
-              <div className="font-bold text-white text-lg">AI ANALYSIS UNAVAILABLE</div>
-              <p className="mt-2 text-sm max-w-md mx-auto">The Gemini API backend is unavailable or not configured. Cannot process image.</p>
+              <div className="font-bold text-white text-lg">AI ANALYSIS FAILED</div>
+              <p className="mt-2 text-sm max-w-md mx-auto">{analysisError}</p>
             </div>
           )}
+          
 
           {analysisResult && (
             <div className="bg-slate-950 border border-purple-500/40 rounded-xl p-5 space-y-4 shadow-xl animate-fadeIn">
@@ -374,9 +408,11 @@ export default function AiImageAssessmentModal({
                     >
                       {analysisResult.severity} Severity
                     </span>
-                    <span className="text-xs font-mono text-purple-400 font-bold">
-                      Confidence: {analysisResult.confidence}%
-                    </span>
+                    {analysisResult.confidence !== null && (
+                      <span className="text-xs font-mono text-purple-400 font-bold">
+                        Confidence: {analysisResult.confidence}%
+                      </span>
+                    )}
                   </div>
                   <h3 className="text-sm sm:text-base font-bold text-white mt-1">
                     {analysisResult.hazardDetected ? analysisResult.hazardType : 'No Visible Hazard'}

@@ -3,7 +3,7 @@ export async function fetchFacilities(lat: number, lon: number, radiusKm: number
     const radiusMeters = radiusKm * 1000;
     // Query hospitals, fire stations, police stations in radius
     const query = `
-      [out:json][timeout:10];
+      [out:json][timeout:12];
       (
         node["amenity"="hospital"](around:${radiusMeters},${lat},${lon});
         node["amenity"="fire_station"](around:${radiusMeters},${lat},${lon});
@@ -16,7 +16,7 @@ export async function fetchFacilities(lat: number, lon: number, radiusKm: number
     const url = `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(query)}`;
     
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 6000);
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
     const apiRes = await fetch(url, { signal: controller.signal });
     clearTimeout(timeoutId);
 
