@@ -15,7 +15,7 @@ import {
   EyeOff
 } from 'lucide-react';
 import { RiskZone } from '../types';
-import { analyzeLandslideImage, AiVisionResult } from '../services/ai/vision';
+import { analyzeLandslideImage, runLocalVisualFallback, AiVisionResult } from '../services/ai/vision';
 
 interface AiImageAssessmentModalProps {
   isOpen: boolean;
@@ -233,7 +233,7 @@ export default function AiImageAssessmentModal({
                   </span>
                 ) : analysisStatus === 'ERROR' ? (
                   <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-red-950 text-red-300 border border-red-800">
-                    GEMINI ANALYSIS FAILED
+                    GEMINI VISION UNAVAILABLE
                   </span>
                 ) : (
                   <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-purple-950 text-purple-300 border border-purple-800">
@@ -390,10 +390,32 @@ export default function AiImageAssessmentModal({
 
           {/* Error Display */}
           {analysisStatus === 'ERROR' && !isAnalyzing && (
-            <div className="bg-slate-950 border border-red-900/50 rounded-xl p-6 text-center text-slate-400">
-              <AlertTriangle size={32} className="mx-auto text-red-400 mb-2" />
-              <div className="font-bold text-white text-base">AI ANALYSIS FAILED</div>
-              <p className="mt-1 text-xs max-w-md mx-auto text-red-300/80">{analysisError || 'Could not analyze image.'}</p>
+            <div className="bg-slate-950 border border-red-900/60 rounded-xl p-6 text-center text-slate-400 space-y-3">
+              <AlertTriangle size={32} className="mx-auto text-red-400 mb-1" />
+              <div className="font-bold text-white text-base">GEMINI VISION UNAVAILABLE</div>
+              <p className="text-xs max-w-md mx-auto text-red-300/80">{analysisError || 'Could not analyze image with Gemini Vision.'}</p>
+              {selectedImage && (
+                <div className="pt-2">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      setIsAnalyzing(true);
+                      setAnalysisStatus('ANALYZING');
+                      setAnalysisError('');
+                      const localRes = await runLocalVisualFallback(selectedImage);
+                      setIsAnalyzing(false);
+                      setAnalysisStatus(localRes.status);
+                      if (localRes.error) setAnalysisError(localRes.error);
+                      if (localRes.result) {
+                        setAnalysisResult(localRes.result);
+                      }
+                    }}
+                    className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-colors cursor-pointer"
+                  >
+                    Run Local Heuristic Fallback
+                  </button>
+                </div>
+              )}
             </div>
           )}
 

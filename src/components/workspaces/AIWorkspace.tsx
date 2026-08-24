@@ -14,7 +14,7 @@ import {
   Compass,
   Activity
 } from 'lucide-react';
-import { analyzeLandslideImage, AiVisionResult } from '../../services/ai/vision';
+import { analyzeLandslideImage, runLocalVisualFallback, AiVisionResult } from '../../services/ai/vision';
 
 interface AIWorkspaceProps {
   intel: any;
@@ -190,6 +190,10 @@ export default function AIWorkspace({ intel, onNavigateToLiveMap, onNavigateToRe
               <span className="font-mono text-xs uppercase px-2 py-0.5 rounded bg-blue-950 text-blue-400 border border-blue-800 font-bold">
                 LOCAL VISUAL ANALYSIS
               </span>
+            ) : analysisStatus === 'ERROR' ? (
+              <span className="font-mono text-xs uppercase px-2 py-0.5 rounded bg-red-950 text-red-400 border border-red-800 font-bold">
+                GEMINI VISION UNAVAILABLE
+              </span>
             ) : (
               <span className="font-mono text-xs uppercase px-2 py-0.5 rounded bg-purple-950 text-purple-400 border border-purple-800 font-bold">
                 AI GEOTECHNICAL ASSESSMENT
@@ -356,12 +360,33 @@ export default function AIWorkspace({ intel, onNavigateToLiveMap, onNavigateToRe
                 <div className="text-sm font-mono">PROCESSING IMAGE...</div>
               </div>
             ) : analysisStatus === 'ERROR' ? (
-              <div className="p-8 text-center text-slate-400 text-sm border border-slate-800 rounded-xl bg-slate-950 mt-4">
-                <AlertTriangle size={32} className="mx-auto text-amber-500 mb-3" />
-                <div className="font-bold text-white text-base">AI ANALYSIS FAILED</div>
-                <p className="mt-2 text-xs">{analysisError}</p>
+              <div className="p-6 text-center text-slate-400 text-sm border border-red-900/60 rounded-xl bg-slate-950 mt-4 space-y-3">
+                <AlertTriangle size={32} className="mx-auto text-red-400 mb-1" />
+                <div className="font-bold text-white text-base">GEMINI VISION UNAVAILABLE</div>
+                <p className="text-xs text-red-300/80 max-w-md mx-auto">{analysisError || 'Gemini Multimodal Vision API request could not be completed.'}</p>
+                {selectedImage && (
+                  <div className="pt-2">
+                    <button
+                      onClick={async () => {
+                        setIsAnalyzing(true);
+                        setAnalysisStatus('ANALYZING');
+                        setAnalysisError('');
+                        const localRes = await runLocalVisualFallback(selectedImage);
+                        setIsAnalyzing(false);
+                        setAnalysisStatus(localRes.status);
+                        if (localRes.error) setAnalysisError(localRes.error);
+                        if (localRes.result) {
+                          setAnalysisResult(localRes.result);
+                          setAnalysisId(`LOCAL-${new Date().toISOString().replace(/\D/g,'').slice(0, 14)}`);
+                        }
+                      }}
+                      className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-colors cursor-pointer"
+                    >
+                      Run Local Heuristic Fallback
+                    </button>
+                  </div>
+                )}
               </div>
-            
             ) : analysisResult ? (
               <div className="space-y-4 pt-4">
                 {/* Structural Parameters Grid */}

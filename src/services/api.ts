@@ -87,6 +87,14 @@ export const submitReport = async (report: any): Promise<ApiSourceResponse<any>>
   return { status: 'OFFLINE', source: 'Supabase Database', timestamp: new Date().toISOString(), data: null, error: res.error };
 };
 
+export const getHealth = async (): Promise<{ status: string; geminiConfigured: boolean; timestamp?: string }> => {
+  const res = await apiFetch('/api/health');
+  if (res.ok && res.data) {
+    return res.data;
+  }
+  return { status: 'error', geminiConfigured: false };
+};
+
 export const analyzeImage = async (imgData: string, locationContext: string, zoneName?: string, state?: string, explicitMimeType?: string): Promise<ApiSourceResponse<any>> => {
   let mimeType = explicitMimeType || 'image/jpeg';
   const match = imgData.match(/^data:([^;]+);base64,/);
@@ -111,6 +119,12 @@ export const analyzeImage = async (imgData: string, locationContext: string, zon
   if (res.ok && res.data?.success) {
     return { status: 'LIVE', source: 'Gemini 2.5 Flash', timestamp: new Date().toISOString(), data: res.data };
   }
-  return { status: 'OFFLINE', source: 'Gemini 2.5 Flash', timestamp: new Date().toISOString(), data: null, error: res.error || res.data?.message || 'GEMINI_UNAVAILABLE' };
+  return { 
+    status: 'OFFLINE', 
+    source: 'Gemini 2.5 Flash', 
+    timestamp: new Date().toISOString(), 
+    data: null, 
+    error: res.data?.message || res.error || 'GEMINI_UNAVAILABLE' 
+  };
 };
 

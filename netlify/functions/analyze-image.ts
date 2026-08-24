@@ -5,30 +5,70 @@ export const handler = async (event: any) => {
     return { 
       statusCode: 405, 
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ error: 'Method Not Allowed' }) 
+      body: JSON.stringify({ 
+        success: false, 
+        error: 'METHOD_NOT_ALLOWED', 
+        message: 'Method Not Allowed. Use POST.' 
+      }) 
     };
   }
   
   try {
-    const body = JSON.parse(event.body || '{}');
-    const image = body.image || body.imageBase64;
-    if (!image) {
-      return { 
-        statusCode: 400, 
+    let body: any = {};
+    try {
+      body = JSON.parse(event.body || '{}');
+    } catch {
+      return {
+        statusCode: 400,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ success: false, error: 'NO_IMAGE_PROVIDED', message: 'No image data provided' }) 
+        body: JSON.stringify({ 
+          success: false, 
+          error: 'INVALID_JSON', 
+          message: 'Malformed JSON payload.' 
+        })
       };
     }
 
+    const rawImage = body.image || body.imageBase64;
+    if (!rawImage || typeof rawImage !== 'string' || !rawImage.trim()) {
+      return { 
+        statusCode: 400, 
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          success: false, 
+          error: 'NO_IMAGE_PROVIDED', 
+          message: 'An image (base64 string) is required in the "image" or "imageBase64" field.' 
+        }) 
+      };
+    }
+
+    let mimeType = body.mimeType || 'image/jpeg';
+    const match = rawImage.match(/^data:([^;]+);base64,/);
+    if (match) {
+      mimeType = match[1];
+    }
+
     const result = await analyzeLandslide(
-      image, 
-      body.mimeType || 'image/jpeg', 
+      rawImage, 
+      mimeType, 
       body.locationContext || '', 
       body.zoneName || '', 
       body.state || ''
     );
+
+    let statusCode = 200;
+    if (!result.success) {
+      if (result.error === 'GEMINI_API_KEY_NOT_CONFIGURED') {
+        statusCode = 503;
+      } else if (result.error === 'EMPTY_IMAGE_DATA') {
+        statusCode = 400;
+      } else {
+        statusCode = 500;
+      }
+    }
+
     return { 
-      statusCode: result.success ? 200 : 500, 
+      statusCode, 
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(result) 
     };
@@ -36,8 +76,13 @@ export const handler = async (event: any) => {
     return { 
       statusCode: 500, 
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ success: false, error: 'SERVER_ERROR', message: e.message }) 
+      body: JSON.stringify({ 
+        success: false, 
+        error: 'SERVER_ERROR', 
+        message: e?.message || 'Internal server error occurred.' 
+      }) 
     };
   }
 };
+
 

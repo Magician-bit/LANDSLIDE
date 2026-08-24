@@ -154,9 +154,11 @@ Prioritizing the minimization of false-negatives, as unpredicted slope failures 
 - `/src/intelligence`: The core deterministic risk and graph engines.
 - `/src/types`: Strict TypeScript definitions.
 
-## 48. Local Development
+## 48. Local Development & Environment Configuration
 ```bash
 npm ci
+# Create a .env file and add your Gemini API Key:
+# GEMINI_API_KEY=your_gemini_api_key_here
 npm run dev
 ```
 
@@ -164,10 +166,27 @@ npm run dev
 ```bash
 npm run build
 ```
-This generates the optimized static application in the `/dist` directory.
+This generates the optimized client application in `/dist` and bundles the Node server handler.
 
-## 50. GitHub Pages Deployment
+## 50. Netlify Deployment & Gemini Vision Setup
+When deploying to Netlify:
+1. **Repository Settings**: Deploy using `netlify.toml` which automatically builds with `npm run build` and directs functions from `netlify/functions`.
+2. **Configure Environment Variable**:
+   - In your Netlify Site Dashboard, navigate to **Site configuration** → **Environment variables**.
+   - Click **Add a variable** → **Add a single variable**.
+   - Key: `GEMINI_API_KEY`
+   - Value: `<your Google Gemini API Key>`
+   - Scope: Functions & Builds
+3. **Verify Deployment Health**:
+   - Check `https://<your-site>.netlify.app/api/health`
+   - Should return: `{"status":"ok","geminiConfigured":true,"timestamp":"..."}`
+4. **Multimodal Vision Flow**:
+   - Client sends base64 image + MIME type via `POST /api/analyze-image`.
+   - Netlify Function invokes `gemini-2.5-flash` with structured JSON schema.
+   - React UI displays `GEMINI VISION ANALYSIS` with confidence scores and physical evidence.
+
+## 51. GitHub Pages Deployment
 The project is configured for automated deployment via GitHub Actions (`.github/workflows/deploy.yml`). Pushing to the `main` branch automatically builds and deploys the static `/dist` artifact to GitHub Pages.
 
-## 51. Disclaimer
+## 52. Disclaimer
 This is a demonstration prototype. It is not intended for live emergency management or life-safety decisions. Do not rely on this application for actual disaster response.

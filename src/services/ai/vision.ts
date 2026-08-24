@@ -85,11 +85,26 @@ export const analyzeLandslideImage = async (
         }
       };
     }
-  } catch (err) {
-    console.warn('Gemini vision API unavailable, falling back to local visual assessment:', err);
-  }
 
-  // 2. Fallback to local visual assessment
+    // If Gemini response status is OFFLINE or unsuccessful, report the error directly without silent fallback
+    return {
+      status: 'ERROR',
+      result: null,
+      error: response.error || 'Gemini Vision service is unavailable.'
+    };
+  } catch (err: any) {
+    console.error('Gemini vision API error:', err);
+    return {
+      status: 'ERROR',
+      result: null,
+      error: err?.message || 'Gemini Vision analysis failed.'
+    };
+  }
+};
+
+export const runLocalVisualFallback = async (
+  imgData: string
+): Promise<{ status: 'LOCAL' | 'ERROR'; result: AiVisionResult | null; error?: string }> => {
   try {
     const localResult = await analyzeImageLocally(imgData);
     
@@ -122,7 +137,7 @@ export const analyzeLandslideImage = async (
       result: {
         mode: 'LOCAL',
         assessment: localResult.hazardDetected ? 'POSSIBLE_LANDSLIDE' : 'NO_CLEAR_LANDSLIDE_EVIDENCE',
-        sceneClassification: localResult.hazardDetected ? 'Potential Terrain Disturbance (Local CV)' : 'Stable Terrain (Local CV)',
+        sceneClassification: localResult.hazardDetected ? 'Potential Terrain Disturbance (Local Heuristic CV)' : 'Stable Terrain (Local Heuristic CV)',
         hazardDetected: localResult.hazardDetected,
         hazardType: localResult.hazardDetected ? 'Terrain Disturbance / Roughness' : 'NO_VISIBLE_HAZARD',
         severity: localResult.severity,
@@ -144,8 +159,9 @@ export const analyzeLandslideImage = async (
     return {
       status: 'ERROR',
       result: null,
-      error: localErr?.message || 'Visual assessment failed'
+      error: localErr?.message || 'Local visual assessment failed'
     };
   }
 };
+
 

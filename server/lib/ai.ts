@@ -20,20 +20,35 @@ export async function analyzeLandslide(
   zoneName?: string, 
   state?: string
 ) {
+  const isKeyConfigured = Boolean(process.env.GEMINI_API_KEY);
+  console.log(`[Gemini Vision] API key configured: ${isKeyConfigured}`);
+
   const ai = getGenAI();
   if (!ai) {
+    console.warn('[Gemini Vision] Request aborted: GEMINI_API_KEY environment variable is not configured.');
     return { 
       success: false, 
       aiLive: false, 
       error: 'GEMINI_API_KEY_NOT_CONFIGURED', 
-      message: 'Gemini API key is not configured.' 
+      message: 'Gemini API key is not configured in server environment variables (GEMINI_API_KEY).' 
     };
   }
 
   try {
     // Strip data URL scheme if present and get raw clean base64
-    const cleanBase64 = imageBase64.replace(/^data:[^;]+;base64,/, '').trim();
+    let cleanMime = mimeType || 'image/jpeg';
+    const dataUrlMatch = imageBase64.match(/^data:([^;]+);base64,(.*)$/s);
+    let cleanBase64 = imageBase64;
+    if (dataUrlMatch) {
+      cleanMime = dataUrlMatch[1] || cleanMime;
+      cleanBase64 = dataUrlMatch[2];
+    } else {
+      cleanBase64 = imageBase64.replace(/^data:[^;]+;base64,/, '');
+    }
+    cleanBase64 = cleanBase64.trim();
+
     if (!cleanBase64) {
+      console.warn('[Gemini Vision] Request rejected: Empty image payload');
       return {
         success: false,
         error: 'EMPTY_IMAGE_DATA',
@@ -41,12 +56,7 @@ export async function analyzeLandslide(
       };
     }
     
-    // Compute simple arithmetic hash of bytes to log distinct requests
-    let hash = 0;
-    for (let i = 0; i < Math.min(cleanBase64.length, 1000); i++) {
-      hash = Math.imul(31, hash) + cleanBase64.charCodeAt(i) | 0;
-    }
-    console.log(`[GEMINI REQUEST] Image Hash: ${hash}, MIME: ${mimeType}, Base64 Length: ${cleanBase64.length}`);
+    console.log(`[Gemini Vision] request started | MIME: ${cleanMime} | Base64 Length: ${cleanBase64.length} chars | Location: ${locationContext || zoneName || 'N/A'}`);
 
     const prompt = `You are a Senior Geotechnical Engineer and Disaster Response Specialist analyzing the actual photograph supplied by the user.
 
@@ -72,7 +82,7 @@ Respond strictly in JSON according to the schema.`;
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
       contents: [
-        { inlineData: { data: cleanBase64, mimeType: mimeType || 'image/jpeg' } },
+        { inlineData: { data: cleanBase64, mimeType: cleanMime } },
         { text: prompt }
       ],
       config: {
@@ -142,7 +152,7 @@ Respond strictly in JSON according to the schema.`;
     });
 
     const parsedJson = JSON.parse(response.text || '{}');
-    console.log(`[GEMINI RESPONSE] Image Hash: ${hash}, Assessment: ${parsedJson.assessment}, Severity: ${parsedJson.severity}`);
+    console.log(`[Gemini Vision] Gemini response received | Assessment: ${parsedJson.assessment} | Severity: ${parsedJson.severity} | Confidence: ${parsedJson.confidence}`);
     
     return {
       success: true,
@@ -155,8 +165,12 @@ Respond strictly in JSON according to the schema.`;
       }
     };
   } catch (err: any) {
-    console.error('Gemini vision analysis error:', err);
-    return { success: false, error: 'AI_ANALYSIS_FAILED', message: err.message };
+    console.error('[Gemini Vision] Gemini error:', err?.message || err);
+    return { 
+      success: false, 
+      error: 'AI_ANALYSIS_FAILED', 
+      message: err?.message || 'Gemini Multimodal Vision request failed.' 
+    };
   }
 }
 
