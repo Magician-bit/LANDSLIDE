@@ -53,7 +53,7 @@ export default function Sidebar({
         <button
           onClick={() => setActiveView('live')}
           className="w-10 h-10 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white flex items-center justify-center shadow-lg shadow-blue-600/30 transition-all cursor-pointer"
-          title="Pan-India Landslide Intelligence Platform"
+          title="Pan-India Disaster Management Platform"
         >
           <Mountain size={20} />
         </button>

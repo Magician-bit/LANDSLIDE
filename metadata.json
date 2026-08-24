@@ -1,6 +1,6 @@
 {
   "name": "Landslide Detector",
-  "description": "Pan-India multi-source landslide intelligence platform fusing IMD meteorology, GSI susceptibility, NRSC historical atlas, Sentinel-1 InSAR surface deformation, NCS seismic data, community field reports, and multimodal AI image assessment.",
+  "description": "Pan-India multi-hazard disaster management and intelligence platform fusing IMD meteorology, GSI susceptibility, NRSC historical atlas, Sentinel-1 InSAR surface deformation, NCS seismic data, community field reports, and multimodal AI image assessment.",
   "requestFramePermissions": [
     "geolocation"
   ],

@@ -304,20 +304,80 @@ export function useIntelligence() {
     return states;
   }, [baselineEnvironment, fieldReports, timelineStep]);
 
-  // Computed Simulation Risk States
+  // Computed Simulation Risk States (Strictly Area-Scoped)
   const simulationRiskStates = useMemo(() => {
     const states: Record<string, ReturnType<typeof calculateDynamicRisk>> = {};
+    const targetZoneId = scenario.selectedZoneId || selectedZoneId;
+    const isScenarioActive = scenario.active && scenario.type !== 'Baseline';
+
     panIndiaZones.forEach((zone) => {
-      states[zone.id] = calculateDynamicRisk(
-        zone,
-        environmentalConditions,
-        scenario,
-        fieldReports,
-        timelineStep
-      );
+      const isTarget = zone.id === targetZoneId;
+      
+      if (!isScenarioActive) {
+        // When simulation is inactive, compute pure live baseline
+        states[zone.id] = calculateDynamicRisk(
+          zone,
+          baselineEnvironment,
+          { active: false, type: 'Baseline', rainfallMultiplier: 1, duration: 24, soilMoistureMultiplier: 1, slopeInstabilityMultiplier: 1, selectedZoneId: null, failedInfrastructureIds: [] },
+          fieldReports,
+          timelineStep
+        );
+      } else if (isTarget) {
+        // Direct target zone receives full scenario multipliers and user-configured environmental conditions
+        states[zone.id] = calculateDynamicRisk(
+          zone,
+          environmentalConditions,
+          { ...scenario, selectedZoneId: targetZoneId },
+          fieldReports,
+          timelineStep
+        );
+      } else if (scenario.type === 'Multi-Zone Landslide' || scenario.type === 'Extreme Weather Cascade') {
+        // Regional multi-zone cascade: check if this zone is in the same regional/state cluster
+        const targetZone = panIndiaZones.find(z => z.id === targetZoneId);
+        const isRegionalNeighbor = targetZone && (zone.state === targetZone.state || zone.hillRange === targetZone.hillRange);
+        
+        if (isRegionalNeighbor) {
+          states[zone.id] = calculateDynamicRisk(
+            zone,
+            {
+              ...baselineEnvironment,
+              rainfall24h: Math.round(baselineEnvironment.rainfall24h * 1.6),
+              soilMoisture: Math.min(95, Math.round(baselineEnvironment.soilMoisture * 1.3))
+            },
+            {
+              ...scenario,
+              rainfallMultiplier: 1.4,
+              soilMoistureMultiplier: 1.3,
+              slopeInstabilityMultiplier: 1.25,
+              selectedZoneId: targetZoneId
+            },
+            fieldReports,
+            timelineStep
+          );
+        } else {
+          // Unrelated distant zones remain strictly at baseline
+          states[zone.id] = calculateDynamicRisk(
+            zone,
+            baselineEnvironment,
+            { active: false, type: 'Baseline', rainfallMultiplier: 1, duration: 24, soilMoistureMultiplier: 1, slopeInstabilityMultiplier: 1, selectedZoneId: null, failedInfrastructureIds: [] },
+            fieldReports,
+            timelineStep
+          );
+        }
+      } else {
+        // Local scenarios (Heavy Rainfall, Slope Failure, Bridge Failure, Earthquake Trigger, Community Report Surge)
+        // Non-selected zones remain strictly on baseline!
+        states[zone.id] = calculateDynamicRisk(
+          zone,
+          baselineEnvironment,
+          { active: false, type: 'Baseline', rainfallMultiplier: 1, duration: 24, soilMoistureMultiplier: 1, slopeInstabilityMultiplier: 1, selectedZoneId: null, failedInfrastructureIds: [] },
+          fieldReports,
+          timelineStep
+        );
+      }
     });
     return states;
-  }, [environmentalConditions, scenario, fieldReports, timelineStep]);
+  }, [environmentalConditions, scenario, selectedZoneId, baselineEnvironment, fieldReports, timelineStep]);
 
   // Active risk states for current view mode
   const riskStates = useMemo(() => {
@@ -552,10 +612,23 @@ export function useIntelligence() {
     [addActionLog]
   );
 
-  // Scenario Presets
+  // Helper to find zone-specific bridge or primary transit edge
+  const getZoneBridgeOrEdgeId = useCallback((zoneId: string) => {
+    const bridgeEdge = panIndiaEdges.find(
+      (e) => e.zoneId === zoneId && (e.type === 'bridge' || e.name?.toLowerCase().includes('bridge') || e.name?.toLowerCase().includes('viaduct') || e.name?.toLowerCase().includes('span') || e.source.includes('B1') || e.target.includes('B1'))
+    );
+    if (bridgeEdge) return bridgeEdge.id;
+    const anyZoneEdge = panIndiaEdges.find((e) => e.zoneId === zoneId);
+    if (anyZoneEdge) return anyZoneEdge.id;
+    return 'E-WAY-01';
+  }, []);
+
+  // Scenario Presets (Strictly Scoped to Selected Area)
   const applyScenarioPreset = useCallback(
     (preset: Scenario['type'] | string, targetZoneId?: string) => {
-      const zoneId = targetZoneId || selectedZoneId || 'KL-WAY-01';
+      const zoneId = targetZoneId || selectedZoneId || 'Z-WAY-01';
+      const targetZone = panIndiaZones.find((z) => z.id === zoneId) || panIndiaZones[0];
+      const targetBridgeId = getZoneBridgeOrEdgeId(zoneId);
 
       if (preset === 'Baseline') {
         setScenario({
@@ -572,7 +645,7 @@ export function useIntelligence() {
           failedInfrastructureIds: []
         });
         setEnvironmentalConditions(initialPanIndiaTrigger);
-        addActionLog('Scenario Reset', 'Reset all parameters and infrastructure to Baseline operational state.', 'SIMULATE');
+        addActionLog('Scenario Reset', `Reset simulation parameters for ${targetZone.name} to Baseline operational state.`, 'SIMULATE');
         return;
       }
 
@@ -592,12 +665,12 @@ export function useIntelligence() {
         });
         setEnvironmentalConditions((prev) => ({
           ...prev,
-          rainfall24h: 125,
-          rainfallAnomaly: 3.2,
-          soilMoisture: 86,
-          antecedentPrecipitation: 180
+          rainfall24h: 135,
+          rainfallAnomaly: 3.4,
+          soilMoisture: 88,
+          antecedentPrecipitation: 185
         }));
-        addActionLog('Preset Applied', `Activated [Heavy Rain] preset (+125mm rainfall) for ${zoneId}.`, 'SIMULATE');
+        addActionLog('Preset Applied', `Activated [Heavy Rainfall] (+135mm rain) | Target Area: ${targetZone.name}, ${targetZone.district} (${targetZone.state})`, 'SIMULATE');
       } else if (preset === 'Slope Failure') {
         setScenario({
           active: true,
@@ -614,18 +687,12 @@ export function useIntelligence() {
         });
         setEnvironmentalConditions((prev) => ({
           ...prev,
-          slopeInstabilityFactor: 92,
-          soilMoisture: 88,
-          groundDeformationRateMm: 24.5
+          slopeInstabilityFactor: 94,
+          soilMoisture: 90,
+          groundDeformationRateMm: 26.5
         }));
-        addActionLog('Preset Applied', `Activated [Slope Failure] preset for ${zoneId}.`, 'SIMULATE');
+        addActionLog('Preset Applied', `Activated [Slope Shear Failure] | Target Area: ${targetZone.name}, ${targetZone.district} (${targetZone.state})`, 'SIMULATE');
       } else if (preset === 'Bridge Failure') {
-        let targetBridgeId = 'E-WY-02'; // Chooralmala Bailey Bridge
-        if (zoneId.startsWith('UK-')) targetBridgeId = 'E-UK-02';
-        else if (zoneId.startsWith('HP-')) targetBridgeId = 'E-HP-02';
-        else if (zoneId.startsWith('SK-') || zoneId.startsWith('Z-')) targetBridgeId = 'B-17';
-        else if (zoneId.startsWith('NL-')) targetBridgeId = 'E-NL-01';
-
         setScenario({
           active: true,
           type: 'Bridge Failure',
@@ -639,8 +706,8 @@ export function useIntelligence() {
           selectedZoneId: zoneId,
           failedInfrastructureIds: [targetBridgeId]
         });
-        addActionLog('Preset Applied', `Activated [Bridge Failure] on ${targetBridgeId} for ${zoneId}.`, 'SIMULATE');
-      } else if (preset === 'Extreme Rainfall') {
+        addActionLog('Preset Applied', `Activated [Bridge Structural Severing] on corridor [${targetBridgeId}] | Target Area: ${targetZone.name}, ${targetZone.district} (${targetZone.state})`, 'SIMULATE');
+      } else if (preset === 'Extreme Rainfall' || preset === 'Cloudburst Event') {
         setScenario({
           active: true,
           type: 'Extreme Rainfall',
@@ -652,17 +719,17 @@ export function useIntelligence() {
           seismicTriggerActive: false,
           communityReportMultiplier: 2.2,
           selectedZoneId: zoneId,
-          failedInfrastructureIds: ['E-WY-01']
+          failedInfrastructureIds: [targetBridgeId]
         });
         setEnvironmentalConditions((prev) => ({
           ...prev,
-          rainfall24h: 210,
-          rainfallAnomaly: 4.8,
-          soilMoisture: 96,
-          antecedentPrecipitation: 280,
-          slopeInstabilityFactor: 88
+          rainfall24h: 225,
+          rainfallAnomaly: 5.2,
+          soilMoisture: 97,
+          antecedentPrecipitation: 295,
+          slopeInstabilityFactor: 90
         }));
-        addActionLog('Preset Applied', `Activated [Extreme Rainfall] preset for ${zoneId}.`, 'SIMULATE');
+        addActionLog('Preset Applied', `Activated [Extreme Cloudburst Event] (+225mm storm surge) | Target Area: ${targetZone.name}, ${targetZone.district} (${targetZone.state}) | Severed: ${targetBridgeId}`, 'SIMULATE');
       } else if (preset === 'Earthquake Trigger') {
         setScenario({
           active: true,
@@ -679,11 +746,29 @@ export function useIntelligence() {
         });
         setEnvironmentalConditions((prev) => ({
           ...prev,
-          groundVibration: 3.8,
-          slopeInstabilityFactor: 90
+          groundVibration: 4.2,
+          slopeInstabilityFactor: 92
         }));
-        addActionLog('Preset Applied', `Activated [Seismic Tremor Trigger] for ${zoneId}.`, 'SIMULATE');
+        addActionLog('Preset Applied', `Activated [M5.8 Seismic Tremor Shockwave] | Target Area: ${targetZone.name}, ${targetZone.district} (${targetZone.state})`, 'SIMULATE');
+      } else if (preset === 'Community Report Surge') {
+        setScenario({
+          active: true,
+          type: 'Community Report Surge',
+          rainfallMultiplier: 1.2,
+          duration: 12,
+          soilMoistureMultiplier: 1.2,
+          slopeInstabilityMultiplier: 1.4,
+          groundDeformationMultiplier: 1.4,
+          seismicTriggerActive: false,
+          communityReportMultiplier: 2.5,
+          selectedZoneId: zoneId,
+          failedInfrastructureIds: []
+        });
+        addActionLog('Preset Applied', `Activated [Citizen Field Incident Surge] | Target Area: ${targetZone.name}, ${targetZone.district} (${targetZone.state})`, 'SIMULATE');
       } else if (preset === 'Multi-Zone Landslide' || preset === 'Extreme Weather Cascade') {
+        const zoneEdges = panIndiaEdges.filter((e) => e.zoneId === zoneId).slice(0, 2).map((e) => e.id);
+        const failedIds = zoneEdges.length > 0 ? zoneEdges : [targetBridgeId];
+
         setScenario({
           active: true,
           type: preset as Scenario['type'],
@@ -695,22 +780,22 @@ export function useIntelligence() {
           seismicTriggerActive: true,
           communityReportMultiplier: 2.5,
           selectedZoneId: zoneId,
-          failedInfrastructureIds: ['E-WY-01', 'E-WY-02']
+          failedInfrastructureIds: failedIds
         });
         setEnvironmentalConditions((prev) => ({
           ...prev,
-          rainfall24h: 260,
-          rainfallAnomaly: 5.5,
+          rainfall24h: 275,
+          rainfallAnomaly: 5.8,
           soilMoisture: 99,
-          antecedentPrecipitation: 320,
-          slopeInstabilityFactor: 96,
-          groundDeformationRateMm: 32.0,
-          groundVibration: 3.2
+          antecedentPrecipitation: 340,
+          slopeInstabilityFactor: 97,
+          groundDeformationRateMm: 34.0,
+          groundVibration: 3.4
         }));
-        addActionLog('Preset Applied', `Activated [${preset}] catastrophic cascade for ${zoneId}.`, 'SIMULATE');
+        addActionLog('Preset Applied', `Activated [${preset}] Catastrophic Regional Cascade | Epicenter Target: ${targetZone.name}, ${targetZone.district} (${targetZone.state})`, 'SIMULATE');
       }
     },
-    [selectedZoneId, addActionLog]
+    [selectedZoneId, addActionLog, getZoneBridgeOrEdgeId]
   );
 
   // Clean full reset
@@ -736,18 +821,31 @@ export function useIntelligence() {
     addActionLog('Full Reset', 'Simulation reverted to live baseline conditions.', 'LIVE');
   }, [addActionLog]);
 
-  // Select zone handler with logging
+  // Select zone handler with seamless simulation state synchronisation
   const handleSelectZone = useCallback(
     (zoneId: string | null) => {
       setSelectedZoneIdState(zoneId);
       if (zoneId) {
         const z = panIndiaZones.find((item) => item.id === zoneId);
         if (z) {
-          addActionLog('Zone Selected', `Inspecting ${z.name}, ${z.state} (${z.id}) - Pop: ${z.population.toLocaleString()}.`);
+          addActionLog('Zone Selected', `Inspecting ${z.name}, ${z.district} • ${z.state} (${z.id}) - Population: ${z.population.toLocaleString()}.`);
         }
+        // If simulation is active, seamlessly shift scenario target to the newly selected zone
+        setScenario((prev) => {
+          if (!prev.active || prev.type === 'Baseline') return prev;
+          let newFailed = prev.failedInfrastructureIds;
+          if (prev.type === 'Bridge Failure' || prev.type === 'Extreme Rainfall' || prev.type === 'Cloudburst Event') {
+            newFailed = [getZoneBridgeOrEdgeId(zoneId)];
+          }
+          return {
+            ...prev,
+            selectedZoneId: zoneId,
+            failedInfrastructureIds: newFailed
+          };
+        });
       }
     },
-    [addActionLog]
+    [addActionLog, getZoneBridgeOrEdgeId]
   );
 
   // Explicit GPS Location finder

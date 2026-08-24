@@ -94,7 +94,7 @@ export default function CommandCenter({
             </span>
           </div>
           <h1 className="text-2xl md:text-3xl font-extrabold text-white tracking-tight">
-            Pan-India Landslide Intelligence Platform
+            Pan-India Disaster Management Platform
           </h1>
           <p className="text-slate-400 text-sm mt-1 max-w-3xl">
             Real-time multi-source data fusion (IMD AWS, Sentinel-1 InSAR, NCS Seismology, GSI NLSM baseline, NRSC Atlas) with Dijkstra isolation routing and Citizen Ground Reporting.

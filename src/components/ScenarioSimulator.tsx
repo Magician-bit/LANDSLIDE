@@ -116,7 +116,7 @@ export default function ScenarioSimulator({ intel, onClose }: { intel: any; onCl
     {
       id: 'Cloudburst Event',
       title: 'Cloudburst & Extreme Rain',
-      desc: '+140mm intense storm surge with road/bridge washouts',
+      desc: `+140mm intense storm surge with corridor washouts in ${selectedZone.district}`,
       icon: CloudRain,
       active: scenario.active && (scenario.type === 'Cloudburst Event' || scenario.type === 'Extreme Rainfall'),
       color: 'border-blue-500/80 bg-blue-950/50 text-blue-300'
@@ -124,7 +124,7 @@ export default function ScenarioSimulator({ intel, onClose }: { intel: any; onCl
     {
       id: 'Earthquake Trigger',
       title: 'M5.8 Seismic Shockwave',
-      desc: 'Ground vibration inducing instantaneous slope failure',
+      desc: `Ground vibration inducing instant slope failure in ${selectedZone.district}`,
       icon: Activity,
       active: scenario.active && scenario.type === 'Earthquake Trigger',
       color: 'border-orange-500/80 bg-orange-950/50 text-orange-300'
@@ -132,40 +132,56 @@ export default function ScenarioSimulator({ intel, onClose }: { intel: any; onCl
     {
       id: 'Bridge Failure',
       title: 'Bridge Structural Severing',
-      desc: 'Sever primary bridge span cutting valley access',
+      desc: `Sever key mountain access corridor in ${selectedZone.name}`,
       icon: ShieldAlert,
       active: scenario.active && scenario.type === 'Bridge Failure',
       color: 'border-red-500/80 bg-red-950/50 text-red-300'
     },
     {
+      id: 'Slope Failure',
+      title: 'Slope Shear Failure',
+      desc: `Pore-water pressure exceeding critical friction angle on ${selectedZone.environmentalFeatures?.slope || 40}° slope`,
+      icon: TrendingUp,
+      active: scenario.active && scenario.type === 'Slope Failure',
+      color: 'border-amber-500/80 bg-amber-950/50 text-amber-300'
+    },
+    {
       id: 'Community Report Surge',
       title: 'Citizen Report Cluster',
-      desc: 'Multiple confirmed field reports of slope fissures',
+      desc: `Multiple confirmed field alerts of fissures across ${selectedZone.district}`,
       icon: Flame,
       active: scenario.active && scenario.type === 'Community Report Surge',
       color: 'border-purple-500/80 bg-purple-950/50 text-purple-300'
+    },
+    {
+      id: 'Extreme Weather Cascade',
+      title: 'Regional Cascade Storm',
+      desc: `Multi-zone catastrophic monsoon surge across ${selectedZone.state}`,
+      icon: Zap,
+      active: scenario.active && (scenario.type === 'Extreme Weather Cascade' || scenario.type === 'Multi-Zone Landslide'),
+      color: 'border-rose-500/80 bg-rose-950/50 text-rose-300'
     }
   ];
 
   return (
     <div id="scenario-simulator-workspace-panel" className="flex flex-col h-full bg-slate-900 border-l border-slate-800 text-slate-100">
       {/* Header */}
-      <div className="p-4 border-b border-slate-800 bg-slate-950/80 flex justify-between items-start shrink-0">
+      <div className="p-4 border-b border-slate-800 bg-slate-950/90 flex justify-between items-start shrink-0">
         <div>
           <div className="flex items-center gap-2">
-            <span className="font-mono text-xs font-bold text-amber-400 bg-amber-950/60 border border-amber-800/60 px-1.5 py-0.5 rounded">
-              SIMULATION ENGINE
+            <span className="font-mono text-[10px] font-bold text-amber-400 bg-amber-950/80 border border-amber-800/80 px-2 py-0.5 rounded tracking-wide uppercase">
+              AREA-SPECIFIC SIMULATOR
             </span>
-            <span className="text-[10px] font-mono px-2 py-0.5 bg-amber-950 text-amber-300 border border-amber-800/80 rounded font-semibold uppercase">
-              WHAT-IF MODELING
+            <span className="text-[10px] font-mono px-2 py-0.5 bg-slate-800 text-slate-300 border border-slate-700 rounded font-semibold uppercase">
+              PHYSICS & NETWORK ENGINE
             </span>
           </div>
-          <h2 className="font-bold text-lg text-white mt-1 flex items-center gap-2">
+          <h2 className="font-bold text-lg text-white mt-1.5 flex items-center gap-2">
             <Sliders size={18} className="text-amber-400" />
             What-If Scenario Simulator
           </h2>
-          <p className="text-xs text-slate-400">
-            Simulate extreme cloudbursts, seismic shocks, and corridor severing
+          <p className="text-xs text-slate-400 mt-0.5">
+            Simulate extreme cloudbursts, seismic shocks, and corridor severing for target sectors
           </p>
         </div>
 
@@ -180,35 +196,50 @@ export default function ScenarioSimulator({ intel, onClose }: { intel: any; onCl
 
       {/* Main Content Area */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {/* 1. Target Sector Selector */}
-        <div className="bg-slate-950 border border-slate-800 p-3 rounded-xl flex items-center justify-between shadow-sm">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-8 h-8 rounded-lg bg-amber-950/80 border border-amber-800/80 flex items-center justify-center text-amber-400 shrink-0 font-mono text-xs font-bold">
+        {/* 1. Target Sector & Geographic Hierarchy */}
+        <div className="bg-slate-950 border border-slate-800 p-3.5 rounded-xl space-y-2.5 shadow-sm">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider flex items-center gap-1.5">
+              <MapPin size={13} className="text-amber-400" />
+              Active Target Sector
+            </span>
+            <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded bg-slate-900 border border-slate-700 text-slate-300">
+              {selectedZone.hillRange || 'Mountain Corridor'}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-amber-950/90 border border-amber-700/80 flex items-center justify-center text-amber-400 shrink-0 font-mono text-sm font-bold shadow-inner">
               {selectedZone.id.replace('Z-', '')}
             </div>
-            <div className="truncate">
-              <div className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Simulation Target Sector</div>
-              <div className="text-xs font-bold text-white truncate">{selectedZone.name} ({selectedZone.state})</div>
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-bold text-white truncate">{selectedZone.name}</div>
+              <div className="text-xs text-slate-400 font-medium">
+                {selectedZone.district} District • {selectedZone.state}
+              </div>
             </div>
           </div>
 
-          <select
-            value={selectedZone.id}
-            onChange={e => intel?.setSelectedZoneId(e.target.value)}
-            className="bg-slate-900 border border-slate-700 text-slate-200 text-xs rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-amber-500 cursor-pointer max-w-[140px] truncate"
-          >
-            {zones.map(z => (
-              <option key={z.id} value={z.id}>
-                {z.name} ({z.state})
-              </option>
-            ))}
-          </select>
+          <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-400">
+            <span>Change Target Area:</span>
+            <select
+              value={selectedZone.id}
+              onChange={e => intel?.setSelectedZoneId(e.target.value)}
+              className="bg-slate-900 border border-slate-700 text-slate-200 text-xs rounded-lg px-2.5 py-1 focus:outline-none focus:border-amber-500 cursor-pointer max-w-[200px] truncate"
+            >
+              {zones.map(z => (
+                <option key={z.id} value={z.id}>
+                  {z.name} ({z.district}, {z.state})
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
 
-        {/* 2. Simulation Status Banner & Controls */}
+        {/* 2. Simulation Status Banner & Area Lock Status */}
         <div className={`p-3.5 rounded-xl border flex items-center justify-between transition-all ${
           scenario.active
-            ? 'bg-amber-950/70 border-amber-500/80 text-amber-200 shadow-lg shadow-amber-950/40'
+            ? 'bg-amber-950/80 border-amber-500 text-amber-200 shadow-lg shadow-amber-950/40 ring-1 ring-amber-500/50'
             : 'bg-slate-950 border-slate-800 text-slate-400'
         }`}>
           <div className="flex items-center gap-2.5">
@@ -216,11 +247,20 @@ export default function ScenarioSimulator({ intel, onClose }: { intel: any; onCl
               <Sparkles size={16} />
             </div>
             <div>
-              <div className="text-xs font-bold text-white">
-                {scenario.active ? `Simulating: ${scenario.type}` : 'Live Telemetry Baseline Active'}
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-white">
+                  {scenario.active ? `Simulating: ${scenario.type}` : 'Live Area Baseline Active'}
+                </span>
+                {scenario.active && (
+                  <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 uppercase font-bold">
+                    Area Lock: {selectedZone.id}
+                  </span>
+                )}
               </div>
-              <div className="text-[10px] font-mono text-slate-400">
-                {scenario.active ? `Risk Escalation: +${riskDelta}% over baseline` : 'Select a preset below or adjust sliders'}
+              <div className="text-[10px] font-mono text-slate-400 mt-0.5">
+                {scenario.active 
+                  ? `Simulation scoped strictly to ${selectedZone.name} (+${riskDelta}% delta)` 
+                  : `Monitoring ${selectedZone.name} under live baseline telemetry`}
               </div>
             </div>
           </div>
@@ -228,7 +268,7 @@ export default function ScenarioSimulator({ intel, onClose }: { intel: any; onCl
           {scenario.active && (
             <button
               onClick={() => intel.resetSimulation()}
-              className="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 rounded-lg text-xs font-semibold flex items-center gap-1 transition-colors"
+              className="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 rounded-lg text-xs font-semibold flex items-center gap-1 transition-colors shrink-0"
             >
               <RotateCcw size={12} />
               Reset
@@ -240,7 +280,7 @@ export default function ScenarioSimulator({ intel, onClose }: { intel: any; onCl
         <div className="space-y-2">
           <div className="text-xs uppercase font-bold text-slate-300 flex items-center justify-between">
             <span>Disaster Stress Presets</span>
-            <span className="text-[10px] text-slate-500 font-mono">1-Click Scenarios</span>
+            <span className="text-[10px] text-slate-400 font-mono">1-Click Scenarios</span>
           </div>
 
           <div className="grid grid-cols-2 gap-2">
@@ -249,7 +289,7 @@ export default function ScenarioSimulator({ intel, onClose }: { intel: any; onCl
               return (
                 <button
                   key={p.id}
-                  onClick={() => intel.applyPresetScenario(p.id)}
+                  onClick={() => intel.applyScenarioPreset ? intel.applyScenarioPreset(p.id, selectedZone.id) : intel.applyPresetScenario(p.id)}
                   className={`p-3 rounded-xl border text-left flex flex-col justify-between gap-1.5 transition-all ${
                     p.active
                       ? `${p.color} ring-1 ring-amber-500 shadow-md`
@@ -273,7 +313,7 @@ export default function ScenarioSimulator({ intel, onClose }: { intel: any; onCl
         {/* 4. Dual Risk Delta Comparison Box */}
         <div className="bg-slate-950 border border-slate-800 p-4 rounded-xl shadow-md space-y-3">
           <div className="text-xs uppercase font-bold text-slate-300 flex items-center justify-between border-b border-slate-800 pb-2">
-            <span>Risk Delta Analysis</span>
+            <span>{selectedZone.name} Risk Analysis</span>
             <span className="font-mono text-[10px] text-slate-400">Baseline vs What-If</span>
           </div>
 

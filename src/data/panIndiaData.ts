@@ -628,7 +628,43 @@ export const panIndiaNodes: InfrastructureNode[] = [
   // Northeast (Assam / Dima Hasao)
   { id: 'N-ASM-S1', type: 'settlement', name: 'Haflong Railway Colony', state: 'Assam', district: 'Dima Hasao', coordinates: [25.1820, 93.0250], population: 2800, zoneId: 'Z-ASM-10', status: 'operational' },
   { id: 'N-ASM-H1', type: 'hospital', name: 'Haflong Civil Hospital', state: 'Assam', district: 'Dima Hasao', coordinates: [25.1680, 93.0150], capacity: 140, status: 'operational' },
-  { id: 'N-ASM-SH1', type: 'shelter', name: 'District Sports Association Shelter', state: 'Assam', district: 'Dima Hasao', coordinates: [25.1750, 93.0200], capacity: 1600, status: 'operational' }
+  { id: 'N-ASM-SH1', type: 'shelter', name: 'District Sports Association Shelter', state: 'Assam', district: 'Dima Hasao', coordinates: [25.1750, 93.0200], capacity: 1600, status: 'operational' },
+
+  // Idukki / Munnar (Z-IDK-02)
+  { id: 'N-IDK-S1', type: 'settlement', name: 'Pettimudi Plantation Settlement', state: 'Kerala', district: 'Idukki', coordinates: [10.1560, 77.0250], population: 1950, zoneId: 'Z-IDK-02', status: 'operational' },
+  { id: 'N-IDK-H1', type: 'hospital', name: 'Munnar General Hospital', state: 'Kerala', district: 'Idukki', coordinates: [10.0880, 77.0590], capacity: 180, status: 'operational' },
+  { id: 'N-IDK-SH1', type: 'shelter', name: 'Rajamala Community Relief Hall', state: 'Kerala', district: 'Idukki', coordinates: [10.1420, 77.0180], capacity: 1400, status: 'operational' },
+  { id: 'N-IDK-B1', type: 'bridge', name: 'Pettimudi Chute Culvert Span', state: 'Kerala', district: 'Idukki', coordinates: [10.1540, 77.0220], status: 'operational', zoneId: 'Z-IDK-02' },
+
+  // Raigad / Mahad (Z-MAH-03)
+  { id: 'N-MAH-S1', type: 'settlement', name: 'Taliye Hill Settlement', state: 'Maharashtra', district: 'Raigad', coordinates: [18.0280, 73.5450], population: 2200, zoneId: 'Z-MAH-03', status: 'operational' },
+  { id: 'N-MAH-H1', type: 'hospital', name: 'Mahad Sub-District Hospital', state: 'Maharashtra', district: 'Raigad', coordinates: [18.0820, 73.4180], capacity: 210, status: 'operational' },
+  { id: 'N-MAH-SH1', type: 'shelter', name: 'Taliye Gram Relief Shelter', state: 'Maharashtra', district: 'Raigad', coordinates: [18.0320, 73.5380], capacity: 1500, status: 'operational' },
+  { id: 'N-MAH-B1', type: 'bridge', name: 'Savitri River Approach Bridge', state: 'Maharashtra', district: 'Raigad', coordinates: [18.0350, 73.5410], status: 'operational', zoneId: 'Z-MAH-03' },
+
+  // Nilgiris / Coonoor (Z-NIL-04)
+  { id: 'N-NIL-S1', type: 'settlement', name: 'Coonoor Upper Ghat Settlement', state: 'Tamil Nadu', district: 'Nilgiris', coordinates: [11.3550, 76.7950], population: 2600, zoneId: 'Z-NIL-04', status: 'operational' },
+  { id: 'N-NIL-H1', type: 'hospital', name: 'Lawley Government Hospital Coonoor', state: 'Tamil Nadu', district: 'Nilgiris', coordinates: [11.3510, 76.7980], capacity: 160, status: 'operational' },
+  { id: 'N-NIL-SH1', type: 'shelter', name: 'Mettupalayam Relief Base', state: 'Tamil Nadu', district: 'Nilgiris', coordinates: [11.3020, 76.9410], capacity: 1800, status: 'operational' },
+  { id: 'N-NIL-B1', type: 'bridge', name: 'Runnymede Mountain Viaduct', state: 'Tamil Nadu', district: 'Nilgiris', coordinates: [11.3480, 76.8120], status: 'operational', zoneId: 'Z-NIL-04' },
+
+  // Sikkim / Mangan (Z-SKM-09)
+  { id: 'N-SKM-S1', type: 'settlement', name: 'Dzongu River Valley Settlement', state: 'Sikkim', district: 'Mangan', coordinates: [27.5080, 88.5360], population: 2100, zoneId: 'Z-SKM-09', status: 'operational' },
+  { id: 'N-SKM-H1', type: 'hospital', name: 'Mangan District Hospital', state: 'Sikkim', district: 'Mangan', coordinates: [27.5120, 88.5280], capacity: 170, status: 'operational' },
+  { id: 'N-SKM-SH1', type: 'shelter', name: 'Phodong Multi-Purpose Relief Shelter', state: 'Sikkim', district: 'Mangan', coordinates: [27.4200, 88.5800], capacity: 1600, status: 'operational' },
+  { id: 'N-SKM-B1', type: 'bridge', name: 'Sankalang Bailey Bridge', state: 'Sikkim', district: 'Mangan', coordinates: [27.5050, 88.5330], status: 'operational', zoneId: 'Z-SKM-09' },
+
+  // Meghalaya / Sohra (Z-MEG-11)
+  { id: 'N-MEG-S1', type: 'settlement', name: 'Sohra Gorge Settlement', state: 'Meghalaya', district: 'East Khasi Hills', coordinates: [25.3240, 91.7380], population: 2300, zoneId: 'Z-MEG-11', status: 'operational' },
+  { id: 'N-MEG-H1', type: 'hospital', name: 'Cherrapunji Community Health Centre', state: 'Meghalaya', district: 'East Khasi Hills', coordinates: [25.2950, 91.7200], capacity: 150, status: 'operational' },
+  { id: 'N-MEG-SH1', type: 'shelter', name: 'Mawkdok Highland Relief Complex', state: 'Meghalaya', district: 'East Khasi Hills', coordinates: [25.3500, 91.7550], capacity: 1700, status: 'operational' },
+  { id: 'N-MEG-B1', type: 'bridge', name: 'Umshiang Gorge Bridge', state: 'Meghalaya', district: 'East Khasi Hills', coordinates: [25.3220, 91.7350], status: 'operational', zoneId: 'Z-MEG-11' },
+
+  // Andhra Pradesh / Araku (Z-EG-12)
+  { id: 'N-EG-S1', type: 'settlement', name: 'Araku Valley Tribal Hamlet', state: 'Andhra Pradesh', district: 'Alluri Sitharama Raju', coordinates: [18.2380, 82.9890], population: 2150, zoneId: 'Z-EG-12', status: 'operational' },
+  { id: 'N-EG-H1', type: 'hospital', name: 'Araku Area Hospital', state: 'Andhra Pradesh', district: 'Alluri Sitharama Raju', coordinates: [18.3280, 82.8800], capacity: 130, status: 'operational' },
+  { id: 'N-EG-SH1', type: 'shelter', name: 'Ananthagiri Mountain Relief Camp', state: 'Andhra Pradesh', district: 'Alluri Sitharama Raju', coordinates: [18.2250, 83.0100], capacity: 1400, status: 'operational' },
+  { id: 'N-EG-B1', type: 'bridge', name: 'Gosthani River Ghat Span', state: 'Andhra Pradesh', district: 'Alluri Sitharama Raju', coordinates: [18.2360, 82.9860], status: 'operational', zoneId: 'Z-EG-12' }
 ];
 
 export const panIndiaEdges: InfrastructureEdge[] = [
@@ -659,7 +695,37 @@ export const panIndiaEdges: InfrastructureEdge[] = [
 
   // Assam Dima Hasao network
   { id: 'E-ASM-01', name: 'Haflong Colony to Civil Hospital', source: 'N-ASM-S1', target: 'N-ASM-H1', type: 'road', distance: 9, lengthKm: 3.8, status: 'active', zoneId: 'Z-ASM-10' },
-  { id: 'E-ASM-02', name: 'Haflong Colony to Sports Shelter', source: 'N-ASM-S1', target: 'N-ASM-SH1', type: 'road', distance: 6, lengthKm: 2.4, status: 'active', zoneId: 'Z-ASM-10' }
+  { id: 'E-ASM-02', name: 'Haflong Colony to Sports Shelter', source: 'N-ASM-S1', target: 'N-ASM-SH1', type: 'road', distance: 6, lengthKm: 2.4, status: 'active', zoneId: 'Z-ASM-10' },
+
+  // Idukki network (Z-IDK-02)
+  { id: 'E-IDK-01', name: 'Pettimudi Settlement to Culvert Bridge', source: 'N-IDK-S1', target: 'N-IDK-B1', type: 'road', distance: 6, lengthKm: 2.2, status: 'active', zoneId: 'Z-IDK-02' },
+  { id: 'E-IDK-02', name: 'Culvert Bridge to Munnar Hospital (SH-17)', source: 'N-IDK-B1', target: 'N-IDK-H1', type: 'highway', highwayRef: 'SH-17', distance: 18, lengthKm: 12.0, status: 'active', zoneId: 'Z-IDK-02' },
+  { id: 'E-IDK-03', name: 'Pettimudi to Rajamala Shelter Route', source: 'N-IDK-S1', target: 'N-IDK-SH1', type: 'road', distance: 8, lengthKm: 4.1, status: 'active', zoneId: 'Z-IDK-02' },
+
+  // Raigad / Mahad network (Z-MAH-03)
+  { id: 'E-MAH-01', name: 'Taliye Hill to Savitri Bridge', source: 'N-MAH-S1', target: 'N-MAH-B1', type: 'road', distance: 7, lengthKm: 3.0, status: 'active', zoneId: 'Z-MAH-03' },
+  { id: 'E-MAH-02', name: 'Savitri Bridge to Mahad Hospital (NH-66)', source: 'N-MAH-B1', target: 'N-MAH-H1', type: 'highway', highwayRef: 'NH-66', distance: 16, lengthKm: 9.4, status: 'active', zoneId: 'Z-MAH-03' },
+  { id: 'E-MAH-03', name: 'Taliye Settlement to Gram Relief Shelter', source: 'N-MAH-S1', target: 'N-MAH-SH1', type: 'road', distance: 5, lengthKm: 1.9, status: 'active', zoneId: 'Z-MAH-03' },
+
+  // Nilgiris network (Z-NIL-04)
+  { id: 'E-NIL-01', name: 'Coonoor Upper Ghat to Viaduct', source: 'N-NIL-S1', target: 'N-NIL-B1', type: 'road', distance: 5, lengthKm: 2.1, status: 'active', zoneId: 'Z-NIL-04' },
+  { id: 'E-NIL-02', name: 'Viaduct to Lawley Hospital Coonoor', source: 'N-NIL-B1', target: 'N-NIL-H1', type: 'highway', highwayRef: 'NH-181', distance: 8, lengthKm: 3.8, status: 'active', zoneId: 'Z-NIL-04' },
+  { id: 'E-NIL-03', name: 'Coonoor to Mettupalayam Relief Base', source: 'N-NIL-S1', target: 'N-NIL-SH1', type: 'road', distance: 22, lengthKm: 14.5, status: 'active', zoneId: 'Z-NIL-04' },
+
+  // Sikkim network (Z-SKM-09)
+  { id: 'E-SKM-01', name: 'Dzongu Valley to Sankalang Bridge', source: 'N-SKM-S1', target: 'N-SKM-B1', type: 'road', distance: 8, lengthKm: 3.5, status: 'active', zoneId: 'Z-SKM-09' },
+  { id: 'E-SKM-02', name: 'Sankalang Bridge to Mangan Hospital', source: 'N-SKM-B1', target: 'N-SKM-H1', type: 'highway', highwayRef: 'NH-310A', distance: 14, lengthKm: 7.6, status: 'active', zoneId: 'Z-SKM-09' },
+  { id: 'E-SKM-03', name: 'Dzongu to Phodong Relief Shelter', source: 'N-SKM-S1', target: 'N-SKM-SH1', type: 'road', distance: 24, lengthKm: 16.0, status: 'active', zoneId: 'Z-SKM-09' },
+
+  // Meghalaya network (Z-MEG-11)
+  { id: 'E-MEG-01', name: 'Sohra Gorge to Umshiang Bridge', source: 'N-MEG-S1', target: 'N-MEG-B1', type: 'road', distance: 6, lengthKm: 2.6, status: 'active', zoneId: 'Z-MEG-11' },
+  { id: 'E-MEG-02', name: 'Umshiang Bridge to Cherrapunji CHC', source: 'N-MEG-B1', target: 'N-MEG-H1', type: 'highway', highwayRef: 'SH-5', distance: 12, lengthKm: 6.8, status: 'active', zoneId: 'Z-MEG-11' },
+  { id: 'E-MEG-03', name: 'Sohra to Mawkdok Relief Complex', source: 'N-MEG-S1', target: 'N-MEG-SH1', type: 'road', distance: 15, lengthKm: 9.2, status: 'active', zoneId: 'Z-MEG-11' },
+
+  // Andhra Pradesh network (Z-EG-12)
+  { id: 'E-EG-01', name: 'Araku Hamlet to Gosthani Span', source: 'N-EG-S1', target: 'N-EG-B1', type: 'road', distance: 5, lengthKm: 2.0, status: 'active', zoneId: 'Z-EG-12' },
+  { id: 'E-EG-02', name: 'Gosthani Span to Araku Area Hospital', source: 'N-EG-B1', target: 'N-EG-H1', type: 'highway', highwayRef: 'SH-39', distance: 16, lengthKm: 10.5, status: 'active', zoneId: 'Z-EG-12' },
+  { id: 'E-EG-03', name: 'Araku to Ananthagiri Relief Camp', source: 'N-EG-S1', target: 'N-EG-SH1', type: 'road', distance: 10, lengthKm: 5.4, status: 'active', zoneId: 'Z-EG-12' }
 ];
 
 export const panIndiaReports: FieldReport[] = [

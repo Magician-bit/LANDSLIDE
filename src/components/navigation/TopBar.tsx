@@ -58,7 +58,7 @@ export default function TopBar({
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-sm md:text-base font-black text-white tracking-wide uppercase truncate">
-                Pan-India Landslide Intelligence Platform
+                Pan-India Disaster Management Platform
               </h1>
 
               {isSimulationActive ? (

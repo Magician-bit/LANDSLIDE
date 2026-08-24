@@ -116,30 +116,50 @@ export function calculateDynamicRisk(
 
   // Apply What-If scenario multipliers if active
   if (safeScenario.active) {
-    if (safeScenario.type === 'Heavy Rain' || safeScenario.type === 'Heavy Rainfall') {
-      rainfallFactor *= (safeScenario.rainfallMultiplier || 1.6);
-      soilFactor *= 1.25;
-    } else if (safeScenario.type === 'Extreme Rainfall' || safeScenario.type === 'Cloudburst Event') {
-      rainfallFactor *= (safeScenario.rainfallMultiplier || 2.4);
-      soilFactor *= 1.5;
-      slopeFactor *= 1.25;
-    } else if (safeScenario.type === 'Earthquake Trigger') {
-      seismicFactor = Math.max(85, (safeScenario.seismicMagnitude || 5.8) * 14);
-      slopeFactor *= 1.4;
-    } else if (safeScenario.type === 'Soil Saturation') {
-      soilFactor *= (safeScenario.soilMoistureMultiplier || 1.6);
+    const isTargetZone = !safeScenario.selectedZoneId || safeZone.id === safeScenario.selectedZoneId;
+    const isRegionalCascade = safeScenario.type === 'Multi-Zone Landslide' || safeScenario.type === 'Extreme Weather Cascade';
+    
+    // Check if zone is in the same regional cluster as the selected target zone
+    const isRegionalNeighbor = isRegionalCascade && safeScenario.selectedZoneId
+      ? (safeZone.state === (safeZone.state || '') || safeZone.hillRange === (safeZone.hillRange || ''))
+      : false;
+
+    if (isTargetZone) {
+      // Full scenario multipliers for the designated target sector
+      if (safeScenario.type === 'Heavy Rain' || safeScenario.type === 'Heavy Rainfall') {
+        rainfallFactor *= (safeScenario.rainfallMultiplier || 1.8);
+        soilFactor *= 1.35;
+      } else if (safeScenario.type === 'Extreme Rainfall' || safeScenario.type === 'Cloudburst Event') {
+        rainfallFactor *= (safeScenario.rainfallMultiplier || 2.8);
+        soilFactor *= 1.6;
+        slopeFactor *= 1.3;
+      } else if (safeScenario.type === 'Earthquake Trigger') {
+        seismicFactor = Math.max(85, (safeScenario.seismicMagnitude || 5.8) * 14.5);
+        slopeFactor *= 1.45;
+        deformationFactor *= 1.5;
+      } else if (safeScenario.type === 'Soil Saturation') {
+        soilFactor *= (safeScenario.soilMoistureMultiplier || 1.7);
+        slopeFactor *= 1.2;
+      } else if (safeScenario.type === 'Slope Failure') {
+        slopeFactor *= (safeScenario.slopeInstabilityMultiplier || 1.9);
+        deformationFactor *= 1.8;
+      } else if (safeScenario.type === 'Community Report Surge') {
+        reportFactor = 95;
+      } else if (safeScenario.type === 'Bridge Failure' || safeScenario.type === 'Road Blockage') {
+        slopeFactor *= 1.15;
+      } else if (isRegionalCascade) {
+        rainfallFactor *= 2.4;
+        soilFactor *= 1.6;
+        slopeFactor *= 1.5;
+        deformationFactor *= 1.6;
+      }
+    } else if (isRegionalNeighbor) {
+      // Moderate attenuated cascade for connected regional neighbors
+      rainfallFactor *= 1.3;
+      soilFactor *= 1.2;
       slopeFactor *= 1.15;
-    } else if (safeScenario.type === 'Slope Failure') {
-      slopeFactor *= (safeScenario.slopeInstabilityMultiplier || 1.8);
-      deformationFactor *= 1.6;
-    } else if (safeScenario.type === 'Community Report Surge') {
-      reportFactor = 92;
-    } else if (safeScenario.type === 'Multi-Zone Landslide' || safeScenario.type === 'Extreme Weather Cascade') {
-      rainfallFactor *= 2.2;
-      soilFactor *= 1.5;
-      slopeFactor *= 1.4;
-      deformationFactor *= 1.5;
     }
+    // All other non-selected zones receive 0 scenario multipliers and remain at baseline
   }
 
   // Bound components to [0, 100]
@@ -367,6 +387,8 @@ export function calculateNetworkImpact(
 
   // Determine edge statuses
   const edgeStatusMap = new Map<string, 'active' | 'threatened' | 'blocked' | 'failed'>();
+  const targetZoneId = safeScenario.selectedZoneId;
+
   safeEdges.forEach(e => {
     let s: 'active' | 'threatened' | 'blocked' | 'failed' = e.status || 'active';
     if (safeScenario.active) {
@@ -375,20 +397,26 @@ export function calculateNetworkImpact(
         safeScenario.failedInfrastructureIds.includes(e.source) ||
         safeScenario.failedInfrastructureIds.includes(e.target);
 
+      const isTargetZoneEdge = !targetZoneId || e.zoneId === targetZoneId;
+
       if (isExplicitlyFailed) {
         s = 'failed';
       } else if (
+        isTargetZoneEdge &&
         (safeScenario.type === 'Road Blockage' || safeScenario.type === 'Road Failure') &&
-        (e.type === 'road' && (e.id.includes('01') || e.id.includes('WAY-01')))
+        e.type === 'road'
       ) {
         s = 'failed';
       } else if (
+        isTargetZoneEdge &&
         safeScenario.type === 'Bridge Failure' &&
-        (e.id.includes('B1') || e.id.includes('B-17') || e.source.includes('B1') || e.target.includes('B1'))
+        (e.type === 'bridge' || e.name?.toLowerCase().includes('bridge') || e.name?.toLowerCase().includes('viaduct') || e.name?.toLowerCase().includes('span') || e.source.includes('B1') || e.target.includes('B1'))
       ) {
         s = 'failed';
-      } else if (safeScenario.type === 'Extreme Weather Cascade') {
-        if (e.id.includes('01') || e.id.includes('B1')) s = 'failed';
+      } else if (isTargetZoneEdge && (safeScenario.type === 'Extreme Weather Cascade' || safeScenario.type === 'Cloudburst Event')) {
+        if (e.type === 'bridge' || e.name?.toLowerCase().includes('bridge') || e.id.includes('01')) {
+          s = 'failed';
+        }
       }
     }
     edgeStatusMap.set(e.id, s);
@@ -530,64 +558,77 @@ export function generateCascadingEffectsChain(
   riskStates: Record<string, RiskState>,
   networkImpact: ReturnType<typeof calculateNetworkImpact>
 ): CascadingNode[] {
-  const topZone = zones.reduce((prev, curr) => {
-    const prevRisk = riskStates[prev.id]?.currentRisk ?? 0;
-    const currRisk = riskStates[curr.id]?.currentRisk ?? 0;
-    return currRisk > prevRisk ? curr : prev;
-  }, zones[0] || { id: 'Z-WAY-01', name: 'Chooralmala-Meppadi Escarpment', coordinates: [11.5320, 76.1530], environmentalFeatures: { slope: 41 } } as RiskZone);
+  // Directly bind cascading effects to the target simulation zone if specified
+  const targetZone = (scenario.selectedZoneId && zones.find(z => z.id === scenario.selectedZoneId))
+    || zones.reduce((prev, curr) => {
+      const prevRisk = riskStates[prev.id]?.currentRisk ?? 0;
+      const currRisk = riskStates[curr.id]?.currentRisk ?? 0;
+      return currRisk > prevRisk ? curr : prev;
+    }, zones[0] || { id: 'Z-WAY-01', name: 'Chooralmala-Meppadi Escarpment', district: 'Wayanad', state: 'Kerala', coordinates: [11.5320, 76.1530], environmentalFeatures: { slope: 41 } } as RiskZone);
 
-  const topRiskState = riskStates[topZone.id] || { currentRisk: 82, primaryDriver: 'Monsoon Surge' };
+  const topRiskState = riskStates[targetZone.id] || { currentRisk: 82, primaryDriver: 'Monsoon Surge' };
   const isolatedCount = networkImpact?.isolatedCommunities || 0;
   const isolatedPop = networkImpact?.isolatedPopulation || 0;
 
   const isRainEvent = scenario.active && (scenario.type === 'Heavy Rain' || scenario.type === 'Heavy Rainfall' || scenario.type === 'Extreme Rainfall' || scenario.type === 'Cloudburst Event');
   const isExtreme = scenario.active && (scenario.type === 'Extreme Rainfall' || scenario.type === 'Cloudburst Event' || scenario.type === 'Extreme Weather Cascade');
+  const isEarthquake = scenario.active && scenario.type === 'Earthquake Trigger';
 
   return [
     {
       id: 'CASC-1',
-      title: isExtreme ? 'Severe Meteorological Surge / Cloudburst' : 'Monsoon Precipitation Anomaly',
-      subtitle: isRainEvent ? `Rainfall +${Math.round((scenario.rainfallMultiplier - 1) * 100)}% over standard 24h threshold` : 'Baseline IMD rainfall telemetry active',
+      title: isEarthquake 
+        ? `M5.8 Seismic Tremor & Ground Acceleration` 
+        : isExtreme 
+        ? `Severe Cloudburst & Extreme Rain (${targetZone.district})` 
+        : isRainEvent 
+        ? `Monsoon Precipitation Surge (${targetZone.name})` 
+        : 'Baseline IMD Meteorological Telemetry',
+      subtitle: isEarthquake
+        ? `Peak ground acceleration along active fault line in ${targetZone.district}, ${targetZone.state}`
+        : isRainEvent 
+        ? `Precipitation +${Math.round((scenario.rainfallMultiplier - 1) * 100)}% over 24h threshold in ${targetZone.district}` 
+        : `Normal baseline meteorological feeds active for ${targetZone.name}`,
       category: 'TRIGGER',
       targetType: 'general',
-      severity: isExtreme ? 'CRITICAL' : isRainEvent ? 'ELEVATED' : 'NORMAL'
+      severity: isExtreme || isEarthquake ? 'CRITICAL' : isRainEvent ? 'ELEVATED' : 'NORMAL'
     },
     {
       id: 'CASC-2',
-      title: 'Pore-Water Saturation Rising',
-      subtitle: `Subsurface soil moisture at ${isRainEvent ? '92%' : '65%'} capacity in ${topZone.district || 'Hilly'} district`,
+      title: 'Pore-Water Pressure & Saturation Spike',
+      subtitle: `Subsurface soil moisture reaching ${isRainEvent ? '94%' : '65%'} capacity across ${targetZone.district} terrain`,
       category: 'SOIL',
       targetType: 'zone',
-      targetId: topZone.id,
-      severity: isRainEvent ? 'CRITICAL' : 'ELEVATED',
-      coordinates: topZone.coordinates
+      targetId: targetZone.id,
+      severity: isRainEvent || isEarthquake ? 'CRITICAL' : 'ELEVATED',
+      coordinates: targetZone.coordinates
     },
     {
       id: 'CASC-3',
-      title: 'Slope Shear Stress Reduction',
-      subtitle: `Factor of Safety declining on ${topZone.environmentalFeatures?.slope || 40}° gradient`,
+      title: 'Slope Shear Stress & Factor of Safety Reduction',
+      subtitle: `Critical shear threshold on ${targetZone.environmentalFeatures?.slope || 40}° gradient (${targetZone.hillRange || 'Mountain Sector'})`,
       category: 'STABILITY',
       targetType: 'zone',
-      targetId: topZone.id,
+      targetId: targetZone.id,
       severity: topRiskState.currentRisk > 75 ? 'CRITICAL' : 'ELEVATED',
-      coordinates: topZone.coordinates
+      coordinates: targetZone.coordinates
     },
     {
       id: 'CASC-4',
       title: `Multi-Source Landslide Risk Peak (${topRiskState.currentRisk}/100)`,
-      subtitle: `${topZone.name} reaches critical instability threshold`,
+      subtitle: `${targetZone.name} reaches critical instability threshold`,
       category: 'HAZARD',
       targetType: 'zone',
-      targetId: topZone.id,
+      targetId: targetZone.id,
       severity: topRiskState.currentRisk > 75 ? 'CRITICAL' : 'ELEVATED',
-      coordinates: topZone.coordinates
+      coordinates: targetZone.coordinates
     },
     {
       id: 'CASC-5',
       title: scenario.failedInfrastructureIds.length > 0 ? 'Road / Bridge Corridor Failure' : 'Downslope Transit Route Threatened',
       subtitle: scenario.failedInfrastructureIds.length > 0 
-        ? `${scenario.failedInfrastructureIds.join(', ')} severed by debris runout`
-        : 'Primary mountain corridor in debris runout zone',
+        ? `${scenario.failedInfrastructureIds.join(', ')} severed in ${targetZone.district}`
+        : `Primary arterial in ${targetZone.name} debris runout zone`,
       category: 'INFRASTRUCTURE',
       targetType: 'edge',
       targetId: scenario.failedInfrastructureIds[0] || 'E-WAY-01',
@@ -596,7 +637,7 @@ export function generateCascadingEffectsChain(
     {
       id: 'CASC-6',
       title: isolatedCount > 0 ? `${isolatedCount} Communities Isolated` : 'Settlement Accessibility Constrained',
-      subtitle: isolatedCount > 0 ? `${isolatedPop.toLocaleString()} citizens cut off from direct hospital access` : 'Travel times increased on steep gradients',
+      subtitle: isolatedCount > 0 ? `${isolatedPop.toLocaleString()} citizens cut off from direct medical access in ${targetZone.district}` : 'Travel times elevated on mountain roads',
       category: 'COMMUNITY',
       targetType: 'node',
       targetId: networkImpact?.results.find(r => r.isolated)?.settlementId || 'N-WAY-S1',
@@ -605,7 +646,7 @@ export function generateCascadingEffectsChain(
     {
       id: 'CASC-7',
       title: 'Dynamic Evacuation & Multi-Agency Response',
-      subtitle: 'Shortest path Dijkstra routing calculated for designated disaster relief shelters',
+      subtitle: `Shortest-path Dijkstra routing calculated for designated disaster relief shelters in ${targetZone.state}`,
       category: 'RESPONSE',
       targetType: 'node',
       targetId: 'N-WAY-SH1',
